@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { generateLessonContent, generateScenarioDrills } from '../services/geminiService';
-import { Book, Loader2, CheckCircle, XCircle, Lock, Star, Heart, Check, Zap, MapPin } from 'lucide-react';
+import { Book, Loader2, CheckCircle, XCircle, Lock, Star, Heart, Check, Zap, MapPin, Volume2 } from 'lucide-react';
 import { loadUserStats, updateHearts, addXp, markTopicComplete } from '../utils/progressUtils';
 
 // --- DATA STRUCTURES ---
@@ -106,12 +105,20 @@ const LessonMode: React.FC = () => {
             generateLessonContent(topic.label),
             generateScenarioDrills(topic.label)
         ]);
-        setLessonContent(JSON.parse(content));
+        setLessonContent(content);
         setDrills(drillData);
     } catch (e) {
         console.error("Failed to load lesson", e);
     }
     setLoading(false);
+  };
+
+  const speakText = (text: string) => {
+      if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'en-US';
+          window.speechSynthesis.speak(utterance);
+      }
   };
 
   const handleAnswer = (isCorrect: boolean) => {
@@ -303,12 +310,15 @@ const LessonMode: React.FC = () => {
                           {lessonProgress === 0 && (
                               <div className="space-y-4 text-center animate-fade-in-up">
                                   <h2 className="text-xl font-black text-slate-800 dark:text-white">Introduction</h2>
-                                  <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm text-left">
-                                      <p className="text-base leading-relaxed text-slate-700 dark:text-slate-300 mb-4 font-medium">{lessonContent.intro_gujarati.length > 200 ? lessonContent.intro_gujarati.substring(0, 200) + "..." : lessonContent.intro_gujarati}</p>
+                                  <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm text-left max-h-[350px] overflow-y-auto custom-scrollbar">
+                                      <p className="text-base leading-relaxed text-slate-700 dark:text-slate-300 mb-4 font-medium">{lessonContent.intro_gujarati}</p>
                                       <div className="space-y-2">
                                           {lessonContent.key_phrases?.slice(0,3).map((p:any, i:number) => (
                                               <div key={i} className="flex justify-between items-center p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800">
-                                                  <span className="font-bold text-sm text-slate-800 dark:text-white">{p.english}</span>
+                                                  <div className="flex items-center gap-2">
+                                                     <button onClick={() => speakText(p.english)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition"><Volume2 size={16}/></button>
+                                                     <span className="font-bold text-sm text-slate-800 dark:text-white">{p.english}</span>
+                                                  </div>
                                                   <span className="text-slate-500 text-xs">{p.gujarati}</span>
                                               </div>
                                           ))}
@@ -321,7 +331,8 @@ const LessonMode: React.FC = () => {
                           {lessonProgress === 1 && drills.vocab_drills?.[0] && (
                               <div className="animate-fade-in-up w-full">
                                    <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Select the correct meaning</h2>
-                                   <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-4">
+                                   <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-4 flex items-center gap-3">
+                                       <button onClick={() => speakText(drills.vocab_drills[0].question)} className="p-2 bg-white dark:bg-slate-900 rounded-full shadow-sm text-slate-400 hover:text-blue-500 transition"><Volume2 size={20}/></button>
                                        <p className="text-base font-bold text-slate-700 dark:text-slate-200">{drills.vocab_drills[0].question}</p>
                                    </div>
                                    <div className="grid gap-2">
@@ -351,7 +362,8 @@ const LessonMode: React.FC = () => {
                           {lessonProgress === 2 && drills.grammar_drills?.[0] && (
                               <div className="animate-fade-in-up w-full">
                                    <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Fill in the blank</h2>
-                                   <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-2xl border-2 border-slate-200 dark:border-slate-700 mb-6 text-center shadow-inner">
+                                   <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-2xl border-2 border-slate-200 dark:border-slate-700 mb-6 text-center shadow-inner relative">
+                                       <button onClick={() => speakText(drills.grammar_drills[0].sentence.replace('_____', 'blank'))} className="absolute top-2 right-2 p-2 text-slate-300 hover:text-blue-500"><Volume2 size={18}/></button>
                                        <p className="text-xl font-bold mb-2 text-slate-800 dark:text-white">{drills.grammar_drills[0].sentence.replace('_____', '_______')}</p>
                                        <p className="text-slate-400 text-xs font-bold">{drills.grammar_drills[0].hint}</p>
                                    </div>
@@ -362,6 +374,9 @@ const LessonMode: React.FC = () => {
                                             placeholder="Type answer here..."
                                             className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 dark:focus:ring-blue-900/30 font-bold text-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white"
                                             onChange={(e) => setUserAnswer(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleAnswer(userAnswer?.toLowerCase().trim() === drills.grammar_drills[0].correct.toLowerCase().trim());
+                                            }}
                                            />
                                        </div>
                                    ) : (
@@ -376,18 +391,19 @@ const LessonMode: React.FC = () => {
                           {lessonProgress === 3 && drills.sentence_builder?.[0] && (
                               <div className="animate-fade-in-up w-full">
                                    <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Translate this sentence</h2>
-                                   <div className="mb-6">
+                                   <div className="mb-6 flex items-center gap-3">
+                                        <button onClick={() => speakText(drills.sentence_builder[0].correct)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500 hover:text-blue-500 transition"><Volume2 size={20}/></button>
                                         <p className="text-slate-500 dark:text-slate-400 font-medium text-base italic">"{drills.sentence_builder[0].gujarati || drills.sentence_builder[0].correct}"</p>
                                    </div>
                                    
-                                   <div className="min-h-[60px] bg-slate-50 dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 mb-6 flex flex-wrap gap-2 p-2 items-center justify-center">
-                                       {sentenceWords.length === 0 && <span className="text-slate-300 text-sm font-bold">Select words below</span>}
+                                   <div className="min-h-[60px] bg-slate-50 dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 mb-6 flex flex-wrap gap-2 p-3 items-center justify-start content-start">
+                                       {sentenceWords.length === 0 && <span className="text-slate-300 text-sm font-bold w-full text-center py-4">Select words below</span>}
                                        {sentenceWords.map((word, i) => (
-                                           <button key={i} onClick={() => setSentenceWords(prev => prev.filter((_, idx) => idx !== i))} className="bg-white dark:bg-slate-700 px-3 py-2 rounded-lg font-bold text-slate-800 dark:text-white border border-slate-200 dark:border-slate-600 shadow-sm text-xs hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition">{word}</button>
+                                           <button key={i} onClick={() => setSentenceWords(prev => prev.filter((_, idx) => idx !== i))} className="bg-white dark:bg-slate-700 px-3 py-2 rounded-lg font-bold text-slate-800 dark:text-white border border-slate-200 dark:border-slate-600 shadow-sm text-xs hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition animate-scale-in">{word}</button>
                                        ))}
                                    </div>
 
-                                   <div className="flex flex-wrap gap-2 justify-center">
+                                   <div className="flex flex-wrap gap-2 justify-center border-t border-slate-100 dark:border-slate-800 pt-4">
                                        {drills.sentence_builder[0].jumbled.map((word:string, i:number) => {
                                            const usedCount = sentenceWords.filter(w => w === word).length;
                                            const totalCount = drills.sentence_builder[0].jumbled.filter((w:string) => w === word).length;
@@ -447,6 +463,7 @@ const LessonMode: React.FC = () => {
                                 <button 
                                     onClick={() => {
                                         const correctText = drills.sentence_builder[0].correct;
+                                        // Improved token matching that handles punctuation better
                                         const tokensRegex = /[\w']+|[.,!?;]/g;
                                         const correctTokens = correctText.match(tokensRegex) || correctText.split(' ');
                                         

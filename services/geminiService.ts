@@ -9,6 +9,43 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+// --- UTILITIES ---
+
+// Robust JSON Cleaner: Removes Markdown code blocks and extracts the JSON object/array
+const cleanAndParseJson = (text: string, defaultValue: any) => {
+  try {
+    if (!text) return defaultValue;
+    
+    // Remove markdown code blocks (```json ... ```)
+    let cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    // If text still has garbage before/after, try to find the first '{' or '[' and last '}' or ']'
+    const firstBrace = cleanText.indexOf('{');
+    const firstBracket = cleanText.indexOf('[');
+    
+    let startIdx = -1;
+    let endIdx = -1;
+
+    // Determine if we are looking for an object or array
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      startIdx = firstBrace;
+      endIdx = cleanText.lastIndexOf('}') + 1;
+    } else if (firstBracket !== -1) {
+      startIdx = firstBracket;
+      endIdx = cleanText.lastIndexOf(']') + 1;
+    }
+
+    if (startIdx !== -1 && endIdx !== -1) {
+      cleanText = cleanText.substring(startIdx, endIdx);
+    }
+
+    return JSON.parse(cleanText);
+  } catch (error) {
+    console.error("JSON Parsing Failed:", error, "Original Text:", text);
+    return defaultValue;
+  }
+};
+
 // Utility to handle retry with exponential backoff for 503 errors and Network errors
 const retryOperation = async <T>(operation: () => Promise<T>, retries = 3, delay = 1000): Promise<T> => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -37,6 +74,8 @@ const retryOperation = async <T>(operation: () => Promise<T>, retries = 3, delay
     throw error;
   }
 };
+
+// --- API FUNCTIONS ---
 
 export const translateText = async (text: string, toEnglish: boolean): Promise<string> => {
   try {
@@ -80,7 +119,7 @@ export const explainDoubt = async (query: string): Promise<string> => {
   }
 };
 
-export const generateLessonContent = async (topic: string): Promise<string> => {
+export const generateLessonContent = async (topic: string): Promise<any> => {
   try {
     return await retryOperation(async () => {
       const ai = getAiClient();
@@ -101,11 +140,11 @@ export const generateLessonContent = async (topic: string): Promise<string> => {
           contents: prompt,
           config: { responseMimeType: 'application/json' }
       });
-      return response.text || "{}";
+      return cleanAndParseJson(response.text || "{}", {});
     });
   } catch (error) {
     console.error("Lesson generation error:", error);
-    return "{}";
+    return {};
   }
 };
 
@@ -158,16 +197,12 @@ export const generateScenarioDrills = async (topic: string, drillType?: 'vocab' 
         config: { responseMimeType: 'application/json' }
       });
 
-      let text = response.text || "{}";
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) text = jsonMatch[0];
-      const data = JSON.parse(text);
+      const data = cleanAndParseJson(response.text || "{}", {});
 
       // Programmatically generate jumbled words for sentence builder if it exists
       if (data.sentence_builder && data.sentence_builder.length > 0) {
           data.sentence_builder = data.sentence_builder.map((item: any) => {
-             // Split by space, keep punctuation attached or separate? Simple split for now.
-             // Better: Match words and punctuation.
+             // Split by space or punctuation logic
              const words = item.correct.match(/[\w']+|[.,!?;]/g) || item.correct.split(' ');
              
              // Shuffle
@@ -214,36 +249,6 @@ export const transcribeAudio = async (base64Audio: string, mimeType: string, lan
   }
 };
 
-export const generateFeedback = async (history: { role: string, text: string }[]): Promise<string> => {
-  try {
-    return await retryOperation(async () => {
-      const ai = getAiClient();
-      const prompt = `
-        Analyze the following conversation between an English learner (user) and a tutor (model).
-        Identify 3 key mistakes made by the user in Grammar, Vocabulary, or Pronunciation (inferred).
-        
-        Output ONLY in Gujarati.
-        Structure:
-        1. Overall Performance (એકંદરે દેખાવ)
-        2. Key Mistakes & Corrections (ભૂલો અને સુધારા)
-        3. Tips for Improvement (સુધારણા માટે ટિપ્સ)
-
-        Conversation History:
-        ${JSON.stringify(history)}
-      `;
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-      });
-      return response.text || "Feedback generation failed.";
-    });
-  } catch (error) {
-    console.error("Feedback error", error);
-    return "Error generating feedback.";
-  }
-};
-
 export const explainGrammarTopic = async (topic: string): Promise<string> => {
   try {
     return await retryOperation(async () => {
@@ -283,9 +288,7 @@ export const checkGrammarPractice = async (sentence: string, topic: string): Pro
 
         Analyze if the sentence is grammatically correct specifically regarding the rules of "${topic}".
         
-        Output raw JSON. Do not use Markdown code blocks.
-        Ensure the tone of the explanation is friendly and encouraging.
-        
+        Output raw JSON.
         JSON Structure:
         {
           "isCorrect": boolean,
@@ -300,12 +303,7 @@ export const checkGrammarPractice = async (sentence: string, topic: string): Pro
         config: { responseMimeType: 'application/json' }
       });
       
-      let text = response.text || "{}";
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) text = jsonMatch[0];
-      else text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-
-      return JSON.parse(text);
+      return cleanAndParseJson(response.text || "{}", { isCorrect: false, explanationGujarati: "Parsing error" });
     });
   } catch (error) {
     console.error("Grammar check error:", error);
@@ -339,11 +337,7 @@ export const generateVocabulary = async (): Promise<any[]> => {
         config: { responseMimeType: 'application/json' }
       });
 
-      let text = response.text || "[]";
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) text = jsonMatch[0];
-      
-      return JSON.parse(text);
+      return cleanAndParseJson(response.text || "[]", []);
     });
   } catch (error) {
     console.error("Vocabulary generation error:", error);
@@ -374,11 +368,7 @@ export const checkVocabularyUsage = async (word: string, sentence: string): Prom
         config: { responseMimeType: 'application/json' }
       });
 
-      let text = response.text || "{}";
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) text = jsonMatch[0];
-
-      return JSON.parse(text);
+      return cleanAndParseJson(response.text || "{}", {});
     });
   } catch (error) {
     console.error("Vocab check error:", error);
@@ -407,83 +397,11 @@ export const generatePhraseOfTheDay = async (): Promise<any> => {
         config: { responseMimeType: 'application/json' }
       });
 
-      let text = response.text || "{}";
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) text = jsonMatch[0];
-
-      return JSON.parse(text);
+      return cleanAndParseJson(response.text || "{}", {});
     });
   } catch (error) {
     console.error("Phrase error:", error);
     return null;
-  }
-};
-
-export const generateExamQuestions = async (level: string, count: number = 10, topic?: string): Promise<any[]> => {
-  try {
-    return await retryOperation(async () => {
-      const ai = getAiClient();
-      const topicConstraint = topic ? `Focus specifically on the topic: "${topic}".` : "";
-      const prompt = `
-        Generate ${count} unique multiple-choice questions for a "Competitive Exam" style English test.
-        Target Audience: Gujarati speakers learning English.
-        Level: ${level}
-        ${topicConstraint}
-        Random Seed: ${Date.now()}
-        
-        Focus on Grammar (tenses, prepositions, articles) and Vocabulary.
-        Ensure the correct answer is randomized (do not always place it as the first option).
-        
-        Output ONLY raw JSON.
-        Array Structure:
-        [
-          {
-            "id": 1,
-            "question": "Question text in English",
-            "options": ["Option A", "Option B", "Option C", "Option D"],
-            "correctIndex": 0, // Index of the correct option (0-3)
-            "explanationGujarati": "Why this answer is correct, explained in Gujarati"
-          }
-        ]
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: { responseMimeType: 'application/json' }
-      });
-
-      let text = response.text || "[]";
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) text = jsonMatch[0];
-      
-      const parsedQuestions = JSON.parse(text);
-
-      // Client-side shuffle to ensure randomness
-      const shuffledQuestions = parsedQuestions.map((q: any) => {
-          const optionsWithIndices = q.options.map((opt: string, i: number) => ({ opt, originalIndex: i }));
-          
-          // Fisher-Yates Shuffle for options
-          for (let i = optionsWithIndices.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              [optionsWithIndices[i], optionsWithIndices[j]] = [optionsWithIndices[j], optionsWithIndices[i]];
-          }
-
-          const newOptions = optionsWithIndices.map((o: any) => o.opt);
-          const newCorrectIndex = optionsWithIndices.findIndex((o: any) => o.originalIndex === q.correctIndex);
-
-          return {
-              ...q,
-              options: newOptions,
-              correctIndex: newCorrectIndex
-          };
-      });
-
-      return shuffledQuestions;
-    });
-  } catch (error) {
-    console.error("Exam questions error:", error);
-    return [];
   }
 };
 
@@ -527,14 +445,10 @@ export const generateGameData = async (gameType: 'scramble' | 'rapidFire', count
                 config: { responseMimeType: 'application/json' }
             });
 
-            let text = response.text || "[]";
-            const jsonMatch = text.match(/\[[\s\S]*\]/);
-            if (jsonMatch) text = jsonMatch[0];
-            
-            const data = JSON.parse(text);
+            const data = cleanAndParseJson(response.text || "[]", []);
             
             // Double check scramble logic on client side if needed, or rely on AI
-            if (gameType === 'scramble') {
+            if (gameType === 'scramble' && Array.isArray(data)) {
                 return data.map((item: any) => ({
                     ...item,
                     word: item.word.toUpperCase(),

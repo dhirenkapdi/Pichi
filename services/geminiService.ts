@@ -2,31 +2,57 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
 // Initialize Gemini Client
 const getAiClient = () => {
+  // The API key must be obtained exclusively from the environment variable process.env.API_KEY
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API Key is missing. Please check your environment configuration.");
+    throw new Error("API_KEY_MISSING");
   }
   return new GoogleGenAI({ apiKey });
 };
 
-// --- UTILITIES ---
+// --- ERROR HANDLING UTILITIES ---
 
-// Robust JSON Cleaner: Removes Markdown code blocks and extracts the JSON object/array
+type ErrorType = 'NETWORK' | 'SERVER_BUSY' | 'AUTH' | 'QUOTA' | 'SAFETY' | 'UNKNOWN';
+
+const classifyError = (error: any): ErrorType => {
+  const msg = (error.message || '').toLowerCase();
+  
+  if (msg.includes('429') || msg.includes('quota') || msg.includes('resource exhausted')) return 'QUOTA';
+  if (msg.includes('401') || msg.includes('403') || msg.includes('api key') || msg.includes('permission')) return 'AUTH';
+  if (msg.includes('503') || msg.includes('overloaded') || msg.includes('unavailable')) return 'SERVER_BUSY';
+  if (msg.includes('network') || msg.includes('fetch') || msg.includes('failed to fetch')) return 'NETWORK';
+  if (msg.includes('candidate') || msg.includes('safety') || msg.includes('blocked')) return 'SAFETY';
+  
+  return 'UNKNOWN';
+};
+
+const getUserFriendlyErrorMessage = (error: any): string => {
+  const type = classifyError(error);
+  switch (type) {
+    case 'AUTH': return "API Key invalid or missing. Please check settings.";
+    case 'QUOTA': return "Server busy (Rate limit). Please wait a moment.";
+    case 'NETWORK': return "Network error. Please check your internet.";
+    case 'SAFETY': return "Content blocked by safety filters.";
+    case 'SERVER_BUSY': return "AI Service is currently overloaded. Try again.";
+    default: return "Something went wrong. Please try again.";
+  }
+};
+
+// Robust JSON Cleaner
 const cleanAndParseJson = (text: string, defaultValue: any) => {
   try {
     if (!text) return defaultValue;
     
-    // Remove markdown code blocks (```json ... ```)
+    // Remove markdown code blocks
     let cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     
-    // If text still has garbage before/after, try to find the first '{' or '[' and last '}' or ']'
+    // Extract JSON object/array
     const firstBrace = cleanText.indexOf('{');
     const firstBracket = cleanText.indexOf('[');
     
     let startIdx = -1;
     let endIdx = -1;
 
-    // Determine if we are looking for an object or array
     if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
       startIdx = firstBrace;
       endIdx = cleanText.lastIndexOf('}') + 1;
@@ -41,36 +67,35 @@ const cleanAndParseJson = (text: string, defaultValue: any) => {
 
     return JSON.parse(cleanText);
   } catch (error) {
-    console.error("JSON Parsing Failed:", error, "Original Text:", text);
+    console.error("JSON Parsing Failed:", error);
     return defaultValue;
   }
 };
 
-// Utility to handle retry with exponential backoff for 503 errors and Network errors
+// Retry Operation Wrapper
 const retryOperation = async <T>(operation: () => Promise<T>, retries = 3, delay = 1000): Promise<T> => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    throw new Error("No internet connection. Please check your network.");
+    throw new Error("NetworkError: No internet connection.");
   }
 
   try {
     return await operation();
   } catch (error: any) {
-    const isNetworkError = 
-      error instanceof TypeError || 
-      error.message?.includes('NetworkError') || 
-      error.message?.includes('fetch failed') || 
-      error.message?.includes('Failed to fetch');
-      
-    const isServiceUnavailable = 
-      error.message?.includes('503') || 
-      error.message?.includes('unavailable') || 
-      error.status === 503;
+    const type = classifyError(error);
 
-    if (retries > 0 && (isNetworkError || isServiceUnavailable)) {
-      console.warn(`Operation failed, retrying in ${delay}ms... (${retries} attempts left). Error: ${error.message}`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return retryOperation(operation, retries - 1, delay * 2);
+    // Don't retry for Auth, Quota, or Safety errors
+    if (type === 'AUTH' || type === 'QUOTA' || type === 'SAFETY') {
+      console.warn(`Aborting retry for ${type} error:`, error.message);
+      throw error;
     }
+
+    // Retry for Network or Server Busy errors
+    if (retries > 0) {
+      console.warn(`Operation failed (${type}), retrying in ${delay}ms... (${retries} attempts left).`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryOperation(operation, retries - 1, delay * 2); // Exponential backoff
+    }
+    
     throw error;
   }
 };
@@ -89,11 +114,11 @@ export const translateText = async (text: string, toEnglish: boolean): Promise<s
         model: 'gemini-2.5-flash',
         contents: prompt,
       });
-      return response.text || "Translation failed.";
+      return response.text || "Translation not available.";
     });
   } catch (error) {
-    console.error("Translation error:", error);
-    return "Error during translation. Please check your connection.";
+    console.error("Translation API Error:", error);
+    return getUserFriendlyErrorMessage(error);
   }
 };
 
@@ -106,6 +131,7 @@ export const explainDoubt = async (query: string): Promise<string> => {
         The user has asked: "${query}".
         Provide a clear, simple explanation in Gujarati. 
         Use English only for examples.
+        Keep it concise (under 100 words).
       `;
       const response: GenerateContentResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -114,8 +140,8 @@ export const explainDoubt = async (query: string): Promise<string> => {
       return response.text || "Could not generate explanation.";
     });
   } catch (error) {
-    console.error("Doubt explanation error:", error);
-    return "Error processing doubt. Please try again.";
+    console.error("Doubt API Error:", error);
+    return getUserFriendlyErrorMessage(error);
   }
 };
 
@@ -127,12 +153,10 @@ export const generateLessonContent = async (topic: string): Promise<any> => {
         Create a short English learning lesson for a Gujarati speaker about "${topic}".
         Output ONLY valid JSON with this structure:
         {
-          "intro_gujarati": "Introduction in Gujarati",
+          "intro_gujarati": "Introduction in Gujarati explaining the topic",
           "key_phrases": [
-            {"english": "Phrase 1", "gujarati": "Meaning 1"},
-            {"english": "Phrase 2", "gujarati": "Meaning 2"}
-          ],
-          "dialogue_scenario": "Description of roleplay"
+            {"english": "Phrase 1", "gujarati": "Meaning 1"}
+          ]
         }
       `;
       const response = await ai.models.generateContent({
@@ -140,11 +164,11 @@ export const generateLessonContent = async (topic: string): Promise<any> => {
           contents: prompt,
           config: { responseMimeType: 'application/json' }
       });
-      return cleanAndParseJson(response.text || "{}", {});
+      return cleanAndParseJson(response.text || "{}", null);
     });
   } catch (error) {
-    console.error("Lesson generation error:", error);
-    return {};
+    console.error("Lesson API Error:", error);
+    return null; // Return null so UI can show specific error state
   }
 };
 
@@ -165,27 +189,26 @@ export const generateScenarioDrills = async (topic: string, drillType?: 'vocab' 
         ${typePrompt}
         Random Seed: ${Date.now()}
         
-        Output ONLY raw JSON with this structure (include only requested keys):
+        Output ONLY raw JSON with this structure:
         {
           "vocab_drills": [
             {
               "question": "English question about vocabulary related to ${topic}",
               "options": ["Option A", "Option B", "Option C"],
-              "correct": "Correct Option String",
-              "explanation": "Gujarati explanation"
+              "correct": "Correct Option String"
             }
           ],
           "grammar_drills": [
              {
                "sentence": "Sentence with a _____ (blank)",
                "correct": "answer",
-               "hint": "Gujarati hint about grammar (prepositions/tenses)"
+               "hint": "Gujarati hint"
              }
           ],
           "sentence_builder": [
              {
-               "correct": "Correct English sentence string",
-               "gujarati": "Gujarati translation of the sentence"
+               "correct": "Correct English sentence",
+               "gujarati": "Gujarati translation"
              }
           ]
         }
@@ -199,30 +222,27 @@ export const generateScenarioDrills = async (topic: string, drillType?: 'vocab' 
 
       const data = cleanAndParseJson(response.text || "{}", {});
 
-      // Programmatically generate jumbled words for sentence builder if it exists
+      // Post-processing for sentence builder (Client-side shuffling)
       if (data.sentence_builder && data.sentence_builder.length > 0) {
           data.sentence_builder = data.sentence_builder.map((item: any) => {
-             // Split by space or punctuation logic
+             // Tokenize: split by space but keep punctuation attached or separate based on simple logic
              const words = item.correct.match(/[\w']+|[.,!?;]/g) || item.correct.split(' ');
              
-             // Shuffle
+             // Shuffle copy
              const jumbled = [...words];
              for (let i = jumbled.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [jumbled[i], jumbled[j]] = [jumbled[j], jumbled[i]];
              }
              
-             return {
-                 ...item,
-                 jumbled
-             };
+             return { ...item, jumbled };
           });
       }
 
       return data;
     });
   } catch (error) {
-    console.error("Drill generation error:", error);
+    console.error("Drill API Error:", error);
     return null;
   }
 };
@@ -244,8 +264,8 @@ export const transcribeAudio = async (base64Audio: string, mimeType: string, lan
       return response.text?.trim() || "";
     });
   } catch (error) {
-    console.error("Transcription error", error);
-    return "";
+    console.error("Transcription API Error:", error);
+    return ""; // Fail silently or return empty string for UI to handle
   }
 };
 
@@ -256,14 +276,12 @@ export const explainGrammarTopic = async (topic: string): Promise<string> => {
       const prompt = `
         Explain the English grammar topic "${topic}" for a Gujarati speaker.
         
-        Format the response using simple Markdown.
-        Structure:
-        1. **Definition** (Explanation in Gujarati)
-        2. **Structure/Formula** (e.g., Subject + Verb + Object)
-        3. **Examples** (3-5 examples with Gujarati translation)
-        4. **Common Mistakes** (List typical errors with Correct vs Incorrect examples)
+        Format as Markdown:
+        1. **Definition** (In Gujarati)
+        2. **Structure** (Formula)
+        3. **Examples** (3 examples with Gujarati)
         
-        Keep it simple and easy to understand.
+        Keep it simple.
       `;
       
       const response = await ai.models.generateContent({
@@ -273,8 +291,8 @@ export const explainGrammarTopic = async (topic: string): Promise<string> => {
       return response.text || "Explanation not available.";
     });
   } catch (error) {
-    console.error("Grammar explanation error:", error);
-    return "Error loading grammar topic. Please check connection.";
+    console.error("Grammar API Error:", error);
+    return `Error: ${getUserFriendlyErrorMessage(error)}`;
   }
 };
 
@@ -283,17 +301,15 @@ export const checkGrammarPractice = async (sentence: string, topic: string): Pro
     return await retryOperation(async () => {
       const ai = getAiClient();
       const prompt = `
-        The user is practicing the English grammar topic: "${topic}".
-        The user wrote/said: "${sentence}".
-
-        Analyze if the sentence is grammatically correct specifically regarding the rules of "${topic}".
+        Topic: "${topic}".
+        User input: "${sentence}".
+        Check grammar.
         
-        Output raw JSON.
-        JSON Structure:
+        Output JSON:
         {
           "isCorrect": boolean,
-          "correctedSentence": "The fully corrected sentence (if incorrect), or the original sentence (if correct)",
-          "explanationGujarati": "Explanation in Gujarati. If incorrect, explain the rule violated. If correct, give a short encouragement."
+          "correctedSentence": "Corrected version or original",
+          "explanationGujarati": "Explanation in Gujarati"
         }
       `;
 
@@ -303,11 +319,15 @@ export const checkGrammarPractice = async (sentence: string, topic: string): Pro
         config: { responseMimeType: 'application/json' }
       });
       
-      return cleanAndParseJson(response.text || "{}", { isCorrect: false, explanationGujarati: "Parsing error" });
+      return cleanAndParseJson(response.text || "{}", { 
+          isCorrect: false, 
+          correctedSentence: sentence, 
+          explanationGujarati: "Could not analyze grammar." 
+      });
     });
   } catch (error) {
-    console.error("Grammar check error:", error);
-    return { isCorrect: false, correctedSentence: "", explanationGujarati: "Error checking grammar. Please try again." };
+    console.error("Grammar Check API Error:", error);
+    return { isCorrect: false, correctedSentence: "", explanationGujarati: getUserFriendlyErrorMessage(error) };
   }
 };
 
@@ -316,17 +336,15 @@ export const generateVocabulary = async (): Promise<any[]> => {
     return await retryOperation(async () => {
       const ai = getAiClient();
       const prompt = `
-        Generate 5 useful English vocabulary words for a Gujarati speaker (Intermediate level).
-        Output ONLY raw JSON (no markdown).
-        
-        Array Structure:
+        Generate 5 useful English vocabulary words for a Gujarati speaker (Intermediate).
+        Output JSON Array:
         [
           {
-            "word": "English Word",
-            "pronunciation": "Phonetic spelling in Gujarati script",
-            "gujaratiMeaning": "Meaning in Gujarati",
-            "englishDefinition": "Short definition in English",
-            "exampleSentence": "A simple example sentence using the word."
+            "word": "Word",
+            "pronunciation": "Gujarati Phonetic",
+            "gujaratiMeaning": "Meaning",
+            "englishDefinition": "Def",
+            "exampleSentence": "Example"
           }
         ]
       `;
@@ -340,7 +358,7 @@ export const generateVocabulary = async (): Promise<any[]> => {
       return cleanAndParseJson(response.text || "[]", []);
     });
   } catch (error) {
-    console.error("Vocabulary generation error:", error);
+    console.error("Vocab API Error:", error);
     return [];
   }
 };
@@ -350,16 +368,9 @@ export const checkVocabularyUsage = async (word: string, sentence: string): Prom
     return await retryOperation(async () => {
       const ai = getAiClient();
       const prompt = `
-        The user is practicing the word: "${word}".
-        User Sentence: "${sentence}".
-        
-        Check if the word is used correctly in the sentence.
-        Output ONLY raw JSON.
-        
-        {
-          "isCorrect": boolean,
-          "feedback": "Explanation in Gujarati. If incorrect, explain why."
-        }
+        Word: "${word}". Sentence: "${sentence}".
+        Check usage.
+        Output JSON: { "isCorrect": boolean, "feedback": "Gujarati feedback" }
       `;
 
       const response = await ai.models.generateContent({
@@ -368,11 +379,11 @@ export const checkVocabularyUsage = async (word: string, sentence: string): Prom
         config: { responseMimeType: 'application/json' }
       });
 
-      return cleanAndParseJson(response.text || "{}", {});
+      return cleanAndParseJson(response.text || "{}", { isCorrect: false, feedback: "Error checking." });
     });
   } catch (error) {
-    console.error("Vocab check error:", error);
-    return { isCorrect: false, feedback: "Error checking usage." };
+    console.error("Vocab Check API Error:", error);
+    return { isCorrect: false, feedback: getUserFriendlyErrorMessage(error) };
   }
 };
 
@@ -381,14 +392,8 @@ export const generatePhraseOfTheDay = async (): Promise<any> => {
     return await retryOperation(async () => {
       const ai = getAiClient();
       const prompt = `
-        Generate a useful English idiom or phrase of the day for a Gujarati speaker.
-        Output ONLY raw JSON.
-        
-        {
-          "phrase": "English Phrase",
-          "gujaratiMeaning": "Meaning in Gujarati",
-          "pronunciation": "Phonetic in Gujarati"
-        }
+        Generate 1 English idiom for Gujarati speakers.
+        Output JSON: { "phrase": "", "gujaratiMeaning": "", "pronunciation": "" }
       `;
 
       const response = await ai.models.generateContent({
@@ -397,10 +402,10 @@ export const generatePhraseOfTheDay = async (): Promise<any> => {
         config: { responseMimeType: 'application/json' }
       });
 
-      return cleanAndParseJson(response.text || "{}", {});
+      return cleanAndParseJson(response.text || "{}", null);
     });
   } catch (error) {
-    console.error("Phrase error:", error);
+    console.error("Phrase API Error:", error);
     return null;
   }
 };
@@ -413,29 +418,13 @@ export const generateGameData = async (gameType: 'scramble' | 'rapidFire', count
             
             if (gameType === 'scramble') {
                 prompt = `
-                  Generate ${count} "Word Scramble" game items for English learners (Gujarati speakers).
-                  Level: Easy to Intermediate.
-                  Output ONLY raw JSON array:
-                  [
-                    {
-                      "word": "APPLE",
-                      "hint": "સફરજન (Fruit)",
-                      "scrambled": "ELPPA" // Ensure scrambled is mixed up
-                    }
-                  ]
+                  Generate ${count} "Word Scramble" items (English word + Gujarati hint).
+                  Output JSON Array: [{ "word": "APPLE", "hint": "સફરજન", "scrambled": "ELPPA" }]
                 `;
             } else if (gameType === 'rapidFire') {
                 prompt = `
-                  Generate ${count} "Rapid Fire Translation" questions.
-                  Level: Easy to Intermediate.
-                  Output ONLY raw JSON array:
-                  [
-                     {
-                       "question": "How are you?",
-                       "options": ["તમે કેમ છો?", "તમે ક્યાં છો?", "શું નામ છે?"],
-                       "correctIndex": 0
-                     }
-                  ]
+                  Generate ${count} translation multiple choice questions.
+                  Output JSON Array: [{ "question": "Hi", "options": ["નમસ્તે", "આવજો"], "correctIndex": 0 }]
                 `;
             }
 
@@ -447,19 +436,17 @@ export const generateGameData = async (gameType: 'scramble' | 'rapidFire', count
 
             const data = cleanAndParseJson(response.text || "[]", []);
             
-            // Double check scramble logic on client side if needed, or rely on AI
             if (gameType === 'scramble' && Array.isArray(data)) {
                 return data.map((item: any) => ({
                     ...item,
-                    word: item.word.toUpperCase(),
-                    // Client side shuffle to be safe
-                    scrambled: item.word.toUpperCase().split('').sort(() => Math.random() - 0.5).join('')
+                    word: item.word?.toUpperCase() || "",
+                    scrambled: item.word?.toUpperCase().split('').sort(() => Math.random() - 0.5).join('') || ""
                 }));
             }
             return data;
         });
     } catch (error) {
-        console.error("Game data error:", error);
+        console.error("Game Data API Error:", error);
         return [];
     }
 }

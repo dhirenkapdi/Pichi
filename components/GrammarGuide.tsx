@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, CheckCircle, AlertCircle, ChevronRight, Play, RotateCcw, Award, ArrowLeft, Sparkles, Send, BrainCircuit, Search, GraduationCap, Library, X, ArrowRight as ArrowRightIcon, PlusCircle, Loader2 } from 'lucide-react';
+import { BookOpen, CheckCircle, AlertCircle, ChevronRight, Play, RotateCcw, Award, ArrowLeft, Sparkles, Send, BrainCircuit, Search, GraduationCap, Library, X, ArrowRight as ArrowRightIcon, PlusCircle, Loader2, List, HelpCircle, AlertTriangle } from 'lucide-react';
 import { grammarCourseData, GrammarChapter, GrammarExercise } from './GrammarCourseData';
 import { explainGrammarTopic, checkGrammarPractice, generateGrammarExercises } from '../services/geminiService';
 import { addXp } from '../utils/progressUtils';
@@ -22,19 +22,42 @@ const GrammarReference: React.FC = () => {
             name: "Simple Present",
             category: "Present",
             usage: "Habits, facts, daily routines.",
-            gujaratiExplanation: "આ કાળનો ઉપયોગ રોજિંદી ક્રિયાઓ, ટેવો, સનાતન સત્યો અને કાયમી પરિસ્થિતિઓ દર્શાવવા માટે થાય છે. તે સૂચવે છે કે કોઈ ક્રિયા નિયમિતપણે થાય છે અથવા સામાન્ય સત્ય છે.",
-            explanation: "The Simple Present tense is used to describe habits, unchanging situations, general truths, and fixed arrangements. It tells us that an action happens regularly or is permanently true.",
+            gujaratiExplanation: "આ કાળનો ઉપયોગ રોજિંદી ક્રિયાઓ, ટેવો, સનાતન સત્યો અને કાયમી પરિસ્થિતિઓ દર્શાવવા માટે થાય છે.",
+            explanation: "The Simple Present tense expresses habits, general truths, repeated actions or unchanging situations, emotions and wishes.",
             structure: "Subject + V1 (s/es)",
-            examples: ["I play football.", "She drinks coffee.", "The sun rises in the east."],
+            forms: {
+                positive: "I/You/We/They play.\nHe/She/It plays.",
+                negative: "I/You/We/They do not (don't) play.\nHe/She/It does not (doesn't) play.",
+                question: "Do I/you/we/they play?\nDoes he/she/it play?"
+            },
+            signalWords: ["always", "usually", "often", "sometimes", "never", "every day", "on Mondays"],
+            detailedRules: [
+                "For He/She/It, add -s to the verb (work → works).",
+                "Verbs ending in -o, -ch, -sh, -ss, -x add -es (go → goes, watch → watches).",
+                "Verbs ending in consonant + y change y to -ies (fly → flies)."
+            ],
+            examples: ["I play football every weekend.", "She drinks coffee in the morning.", "The sun rises in the east."],
             color: "from-blue-500 to-cyan-500"
         },
         {
             name: "Present Continuous",
             category: "Present",
             usage: "Actions happening right now.",
-            gujaratiExplanation: "આ કાળનો ઉપયોગ બોલતી વખતે જે ક્રિયા ચાલુ હોય તે દર્શાવવા માટે થાય છે. તે હમણાં બની રહેલી અથવા કામચલાઉ પરિસ્થિતિઓનું વર્ણન કરે છે.",
-            explanation: "The Present Continuous (or Progressive) tense is used to describe an action that is currently happening at the moment of speaking, or for temporary situations happening around now.",
+            gujaratiExplanation: "આ કાળનો ઉપયોગ બોલતી વખતે જે ક્રિયા ચાલુ હોય તે દર્શાવવા માટે થાય છે.",
+            explanation: "The Present Continuous (or Progressive) tense is used to describe an action that is currently happening at the moment of speaking.",
             structure: "Subject + is/am/are + V-ing",
+            forms: {
+                positive: "I am playing.\nHe/She is playing.\nWe/They are playing.",
+                negative: "I am not playing.\nHe/She is not playing.\nWe/They are not playing.",
+                question: "Am I playing?\nIs he/she playing?\nAre we/they playing?"
+            },
+            signalWords: ["now", "at the moment", "Look!", "Listen!", "currently"],
+            detailedRules: [
+                "Use 'am' for I.",
+                "Use 'is' for He, She, It.",
+                "Use 'are' for You, We, They.",
+                "Verbs ending in 'e' drop the 'e' (make → making)."
+            ],
             examples: ["I am eating now.", "She is sleeping.", "They are running."],
             color: "from-emerald-500 to-teal-500"
         },
@@ -42,9 +65,20 @@ const GrammarReference: React.FC = () => {
             name: "Present Perfect",
             category: "Present",
             usage: "Action finished recently or experience.",
-            gujaratiExplanation: "આ કાળ ભૂતકાળ અને વર્તમાનને જોડે છે. તે એવી ક્રિયા દર્શાવે છે જે હમણાં જ પૂરી થઈ છે અથવા ભૂતકાળમાં પૂરી થઈ ગઈ છે પણ તેની અસર વર્તમાનમાં હજુ વર્તાય છે.",
-            explanation: "The Present Perfect tense connects the past with the present. It describes an action that happened at an unspecified time in the past, or an action that began in the past and continues to the present.",
+            gujaratiExplanation: "આ કાળ ભૂતકાળ અને વર્તમાનને જોડે છે. તે એવી ક્રિયા દર્શાવે છે જે હમણાં જ પૂરી થઈ છે.",
+            explanation: "The Present Perfect tense connects the past with the present. It describes an action that happened at an unspecified time in the past.",
             structure: "Subject + has/have + V3",
+            forms: {
+                positive: "I/You/We/They have played.\nHe/She/It has played.",
+                negative: "I/You/We/They have not played.\nHe/She/It has not played.",
+                question: "Have I/you/we/they played?\nHas he/she/it played?"
+            },
+            signalWords: ["just", "yet", "never", "ever", "already", "so far", "up to now", "since", "for"],
+            detailedRules: [
+                "Use 'have' for I, You, We, They.",
+                "Use 'has' for He, She, It.",
+                "Use the Past Participle (V3) form of the verb."
+            ],
             examples: ["I have finished my work.", "She has visited London."],
             color: "from-orange-500 to-amber-500"
         },
@@ -52,9 +86,15 @@ const GrammarReference: React.FC = () => {
             name: "Present Perfect Continuous",
             category: "Present",
             usage: "Action started in past and continues to present.",
-            gujaratiExplanation: "આ કાળ દર્શાવે છે કે કોઈ ક્રિયા ભૂતકાળમાં શરૂ થઈ હતી અને વર્તમાનમાં પણ ચાલુ છે. તે ક્રિયાના સમયગાળા પર ભાર મૂકે છે.",
-            explanation: "The Present Perfect Continuous tense shows that something started in the past and is continuing at the present time. It emphasizes the duration of the action.",
+            gujaratiExplanation: "આ કાળ દર્શાવે છે કે કોઈ ક્રિયા ભૂતકાળમાં શરૂ થઈ હતી અને વર્તમાનમાં પણ ચાલુ છે.",
+            explanation: "The Present Perfect Continuous tense shows that something started in the past and is continuing at the present time.",
             structure: "Subject + has/have + been + V-ing",
+            forms: {
+                positive: "I/You/We/They have been playing.\nHe/She/It has been playing.",
+                negative: "I/You/We/They have not been playing.",
+                question: "Have I/you/we/they been playing?"
+            },
+            signalWords: ["all day", "the whole day", "how long", "since", "for"],
             examples: ["I have been waiting for 2 hours.", "It has been raining since morning."],
             color: "from-yellow-500 to-orange-600"
         },
@@ -63,9 +103,20 @@ const GrammarReference: React.FC = () => {
             name: "Simple Past",
             category: "Past",
             usage: "Actions finished in the past.",
-            gujaratiExplanation: "આ કાળનો ઉપયોગ ભૂતકાળમાં ચોક્કસ સમયે પૂરી થયેલી ક્રિયાઓ દર્શાવવા માટે થાય છે. તે વીતી ગયેલા સમયની વાત કરે છે.",
-            explanation: "The Simple Past tense is used to talk about a completed action in a time before now. The time of the action can be in the recent past or the distant past.",
+            gujaratiExplanation: "આ કાળનો ઉપયોગ ભૂતકાળમાં ચોક્કસ સમયે પૂરી થયેલી ક્રિયાઓ દર્શાવવા માટે થાય છે.",
+            explanation: "The Simple Past tense is used to talk about a completed action in a time before now.",
             structure: "Subject + V2",
+            forms: {
+                positive: "I/You/He/She/It/We/They played.",
+                negative: "I/You/He/She/It/We/They did not play.",
+                question: "Did I/you/he/she/it/we/they play?"
+            },
+            signalWords: ["yesterday", "last week", "a month ago", "in 2010"],
+            detailedRules: [
+                "Regular verbs add -ed (work → worked).",
+                "Irregular verbs change completely (go → went, see → saw).",
+                "In negative and question forms, use 'did' + base verb."
+            ],
             examples: ["I played cricket yesterday.", "He bought a car."],
             color: "from-rose-500 to-pink-500"
         },
@@ -73,9 +124,15 @@ const GrammarReference: React.FC = () => {
             name: "Past Continuous",
             category: "Past",
             usage: "Action going on at a specific time in past.",
-            gujaratiExplanation: "આ કાળ દર્શાવે છે કે ભૂતકાળમાં કોઈ ચોક્કસ સમયે અથવા જ્યારે બીજી કોઈ ઘટના બની ત્યારે કોઈ ક્રિયા ચાલુ હતી.",
-            explanation: "The Past Continuous tense describes actions or events in a time before now, which began in the past and were still going on when another event occurred.",
+            gujaratiExplanation: "આ કાળ દર્શાવે છે કે ભૂતકાળમાં કોઈ ચોક્કસ સમયે ક્રિયા ચાલુ હતી.",
+            explanation: "The Past Continuous tense describes actions or events in a time before now, which began in the past and were still going on.",
             structure: "Subject + was/were + V-ing",
+            forms: {
+                positive: "I/He/She/It was playing.\nYou/We/They were playing.",
+                negative: "I/He/She/It was not playing.",
+                question: "Was I/he/she/it playing?\nWere you/we/they playing?"
+            },
+            signalWords: ["while", "when", "as", "at 10pm yesterday"],
             examples: ["I was sleeping at 10 PM.", "They were watching TV."],
             color: "from-purple-500 to-indigo-500"
         },
@@ -84,8 +141,14 @@ const GrammarReference: React.FC = () => {
             category: "Past",
             usage: "Action finished before another past action.",
             gujaratiExplanation: "જ્યારે ભૂતકાળમાં બે ક્રિયાઓ બની હોય, ત્યારે જે ક્રિયા પહેલા પૂરી થઈ હતી તે દર્શાવવા માટે પૂર્ણ ભૂતકાળ વપરાય છે.",
-            explanation: "The Past Perfect tense expresses an action that occurred before another action in the past. It helps to clarify which event happened first.",
+            explanation: "The Past Perfect tense expresses an action that occurred before another action in the past.",
             structure: "Subject + had + V3",
+            forms: {
+                positive: "I/You/He/She/We/They had played.",
+                negative: "I/You/He/She/We/They had not played.",
+                question: "Had I/you/he/she/we/they played?"
+            },
+            signalWords: ["already", "just", "never", "before", "after", "when"],
             examples: ["The train had left before I arrived.", "I had already eaten."],
             color: "from-red-600 to-rose-700"
         },
@@ -96,6 +159,12 @@ const GrammarReference: React.FC = () => {
             gujaratiExplanation: "આ કાળ દર્શાવે છે કે ભૂતકાળમાં કોઈ ક્રિયા શરૂ થઈ હતી અને ભૂતકાળના જ કોઈ બીજા સમય સુધી સતત ચાલુ રહી હતી.",
             explanation: "The Past Perfect Continuous tense shows that an action that started in the past continued up until another time in the past.",
             structure: "Subject + had + been + V-ing",
+            forms: {
+                positive: "I/You/He/She/We/They had been playing.",
+                negative: "I/You/He/She/We/They had not been playing.",
+                question: "Had I/you/he/she/we/they been playing?"
+            },
+            signalWords: ["how long", "since", "for"],
             examples: ["He had been working there for 5 years when he quit.", "It had been snowing all night."],
             color: "from-pink-600 to-fuchsia-700"
         },
@@ -105,8 +174,14 @@ const GrammarReference: React.FC = () => {
             category: "Future",
             usage: "Future plans or predictions.",
             gujaratiExplanation: "આ કાળનો ઉપયોગ ભવિષ્યમાં થનારી ક્રિયાઓ, આગાહીઓ અથવા બોલતી વખતે લીધેલા નિર્ણયો દર્શાવવા માટે થાય છે.",
-            explanation: "The Simple Future tense is used to predict a future event or to express a spontaneous decision made at the moment of speaking.",
+            explanation: "The Simple Future tense is used to predict a future event or to express a spontaneous decision.",
             structure: "Subject + will + V1",
+            forms: {
+                positive: "I/You/He/She/We/They will play.",
+                negative: "I/You/He/She/We/They will not (won't) play.",
+                question: "Will I/you/he/she/we/they play?"
+            },
+            signalWords: ["tomorrow", "next week", "in a year", "soon"],
             examples: ["I will call you.", "It will rain tomorrow."],
             color: "from-sky-500 to-blue-600"
         },
@@ -117,6 +192,11 @@ const GrammarReference: React.FC = () => {
             gujaratiExplanation: "આ કાળ દર્શાવે છે કે ભવિષ્યમાં કોઈ ચોક્કસ સમયે કોઈ ક્રિયા ચાલુ હશે.",
             explanation: "The Future Continuous tense indicates that something will occur in the future and continue for an expected length of time.",
             structure: "Subject + will + be + V-ing",
+            forms: {
+                positive: "I/You/He/She/We/They will be playing.",
+                negative: "I/You/He/She/We/They will not be playing.",
+                question: "Will I/you/he/she/we/they be playing?"
+            },
             examples: ["I will be sleeping at 10 PM.", "We will be traveling next week."],
             color: "from-cyan-500 to-sky-600"
         },
@@ -127,6 +207,12 @@ const GrammarReference: React.FC = () => {
             gujaratiExplanation: "આ કાળ દર્શાવે છે કે ભવિષ્યમાં આપેલા કોઈ ચોક્કસ સમય સુધીમાં કોઈ ક્રિયા પૂરી થઈ ગઈ હશે.",
             explanation: "The Future Perfect tense is used for actions that will be completed before some other point in the future.",
             structure: "Subject + will + have + V3",
+            forms: {
+                positive: "I/You/He/She/We/They will have played.",
+                negative: "I/You/He/She/We/They will not have played.",
+                question: "Will I/you/he/she/we/they have played?"
+            },
+            signalWords: ["by Monday", "by then", "by the time"],
             examples: ["I will have finished by 5 PM.", "She will have left by then."],
             color: "from-indigo-500 to-violet-600"
         },
@@ -134,9 +220,14 @@ const GrammarReference: React.FC = () => {
             name: "Future Perfect Continuous",
             category: "Future",
             usage: "Action continuing up to a certain time in future.",
-            gujaratiExplanation: "આ કાળ દર્શાવે છે કે ભવિષ્યમાં અમુક સમય સુધી કોઈ ક્રિયા ચાલુ રહેશે. તે ભવિષ્યમાં ક્રિયાના સમયગાળા પર ભાર મૂકે છે.",
+            gujaratiExplanation: "આ કાળ દર્શાવે છે કે ભવિષ્યમાં અમુક સમય સુધી કોઈ ક્રિયા ચાલુ રહેશે.",
             explanation: "The Future Perfect Continuous tense describes an action that will continue up until a point in the future.",
             structure: "Subject + will + have + been + V-ing",
+            forms: {
+                positive: "I/You/He/She/We/They will have been playing.",
+                negative: "I/You/He/She/We/They will not have been playing.",
+                question: "Will I/you/he/she/we/they have been playing?"
+            },
             examples: ["By next year, I will have been working here for 10 years."],
             color: "from-violet-600 to-purple-700"
         }
@@ -238,32 +329,97 @@ const GrammarReference: React.FC = () => {
                     
                     {!isPracticing ? (
                         <div className="p-8 space-y-8">
-                             <div>
-                                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <BookOpen size={16}/> Explanation
-                                </h4>
-                                <div className="space-y-4">
-                                    <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
+                             {/* Intro & Gujarati Explanation */}
+                             <div className="grid md:grid-cols-3 gap-8">
+                                <div className="md:col-span-2 space-y-4">
+                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                        <BookOpen size={16}/> Overview
+                                    </h4>
+                                    <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
                                         {selectedTense.explanation}
                                     </p>
-                                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-2xl border border-indigo-100 dark:border-indigo-500/20">
-                                        <h5 className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-2">Gujarati Explanation</h5>
-                                        <p className="text-lg text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
+                                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
+                                        <h5 className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-1">In Gujarati</h5>
+                                        <p className="text-base text-slate-800 dark:text-slate-200 font-medium">
                                             {selectedTense.gujaratiExplanation}
                                         </p>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div className="grid md:grid-cols-2 gap-8">
-                                <div>
-                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Structure</h4>
-                                    <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl font-mono text-lg font-bold text-slate-800 dark:text-slate-200 inline-block border border-slate-200 dark:border-slate-700 w-full text-center">
-                                        {selectedTense.structure}
-                                    </div>
+                                <div className="md:col-span-1">
+                                    {selectedTense.signalWords && (
+                                        <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 h-full">
+                                            <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                                <AlertTriangle size={14}/> Signal Words
+                                            </h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {selectedTense.signalWords.map((word: string, i: number) => (
+                                                    <span key={i} className="px-2 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md text-xs font-bold text-slate-600 dark:text-slate-300">
+                                                        {word}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
+                             </div>
+
+                             {/* Forms Section (Table-like structure) */}
+                             {selectedTense.forms && (
+                                 <div>
+                                     <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                         <List size={16}/> How to Form
+                                     </h4>
+                                     <div className="grid md:grid-cols-3 gap-4">
+                                         <div className="bg-emerald-50 dark:bg-emerald-900/10 p-5 rounded-2xl border border-emerald-100 dark:border-emerald-500/20">
+                                             <div className="flex items-center gap-2 mb-3 text-emerald-600 dark:text-emerald-400 font-bold uppercase text-xs tracking-wider">
+                                                 <PlusCircle size={14} /> Affirmative
+                                             </div>
+                                             <div className="text-slate-800 dark:text-slate-200 font-mono text-sm whitespace-pre-line leading-relaxed">
+                                                 {selectedTense.forms.positive}
+                                             </div>
+                                         </div>
+                                         <div className="bg-rose-50 dark:bg-rose-900/10 p-5 rounded-2xl border border-rose-100 dark:border-rose-500/20">
+                                             <div className="flex items-center gap-2 mb-3 text-rose-600 dark:text-rose-400 font-bold uppercase text-xs tracking-wider">
+                                                 <AlertCircle size={14} /> Negative
+                                             </div>
+                                             <div className="text-slate-800 dark:text-slate-200 font-mono text-sm whitespace-pre-line leading-relaxed">
+                                                 {selectedTense.forms.negative}
+                                             </div>
+                                         </div>
+                                         <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-2xl border border-blue-100 dark:border-blue-500/20">
+                                             <div className="flex items-center gap-2 mb-3 text-blue-600 dark:text-blue-400 font-bold uppercase text-xs tracking-wider">
+                                                 <HelpCircle size={14} /> Question
+                                             </div>
+                                             <div className="text-slate-800 dark:text-slate-200 font-mono text-sm whitespace-pre-line leading-relaxed">
+                                                 {selectedTense.forms.question}
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             )}
+
+                             {/* Rules & Examples Split */}
+                             <div className="grid md:grid-cols-2 gap-8">
+                                {selectedTense.detailedRules && (
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <Award size={16}/> Rules & Exceptions
+                                        </h4>
+                                        <ul className="space-y-3">
+                                            {selectedTense.detailedRules.map((rule: string, i: number) => (
+                                                <li key={i} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
+                                                    <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></div>
+                                                    {rule}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                                
                                 <div>
-                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Examples</h4>
+                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <CheckCircle size={16}/> Examples
+                                    </h4>
                                     <ul className="space-y-3">
                                         {selectedTense.examples.map((ex: string, i: number) => (
                                             <li key={i} className="flex items-center gap-3 text-lg text-slate-700 dark:text-slate-300">
@@ -273,7 +429,7 @@ const GrammarReference: React.FC = () => {
                                         ))}
                                     </ul>
                                 </div>
-                            </div>
+                             </div>
 
                             <div className="flex gap-4 pt-4">
                                 <button 

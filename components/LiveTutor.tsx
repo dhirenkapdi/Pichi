@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { createBlob, decode, decodeAudioData } from '../utils/audioUtils';
 import { incrementWordsSpoken } from '../utils/progressUtils';
-import { Mic, MicOff, Volume2, XCircle, MessageSquare, Play, Loader2, WifiOff, AlertCircle } from 'lucide-react';
+import { Mic, MicOff, Volume2, X, MessageSquare, Play, Loader2, WifiOff, AlertCircle, StopCircle, User } from 'lucide-react';
 
 interface LiveTutorProps {
   onClose: () => void;
@@ -22,7 +22,7 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   
-  // Refs for audio handling to avoid re-renders
+  // Refs for audio handling
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const outputAudioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -31,7 +31,7 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
   const nextStartTimeRef = useRef<number>(0);
   const mountedRef = useRef(true);
   
-  // Refs for transcription accumulation
+  // Refs for transcription
   const currentUserTextRef = useRef('');
   const currentModelTextRef = useRef('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -69,7 +69,6 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
     }
 
     return () => cleanup();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -98,7 +97,10 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
     setStatus('Initializing Audio...');
     
     try {
-      if (!process.env.API_KEY) {
+      // The API key must be obtained exclusively from the environment variable process.env.API_KEY
+      const apiKey = process.env.API_KEY;
+
+      if (!apiKey) {
         throw new Error("API Key is missing. Check configuration.");
       }
 
@@ -106,7 +108,7 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
           throw new Error("No internet connection. Please check your network.");
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -114,7 +116,6 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
       const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       
-      // Ensure context is running (fixes some browser autoplay blocks)
       if (inputAudioContext.state === 'suspended') await inputAudioContext.resume();
       if (outputAudioContext.state === 'suspended') await outputAudioContext.resume();
 
@@ -123,8 +124,7 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
 
       setStatus('Connecting to Pichi...');
 
-      // Connection with Robust Retry Logic
-      const connectWithRetry = async (retries = 5, delay = 1000): Promise<any> => {
+      const connectWithRetry = async (retries = 3, delay = 1000): Promise<any> => {
           try {
               return await ai.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -142,7 +142,6 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                       const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
                       const pcmBlob = createBlob(inputData);
                       
-                      // Only send if session is established
                       if (sessionPromiseRef.current) {
                           sessionPromiseRef.current.then((session) => {
                             session.sendRealtimeInput({ media: pcmBlob });
@@ -156,17 +155,13 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                   onmessage: async (message: LiveServerMessage) => {
                      if (!mountedRef.current) return;
 
-                     // Handle Audio Output
+                     // Audio Output
                      const base64EncodedAudioString = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
                      if (base64EncodedAudioString) {
                         const ctx = outputAudioContextRef.current;
                         if (ctx) {
-                            // Simulate "Thinking" delay for realism if this is the start of a turn
                             const isNewTurn = !isAiSpeaking; 
-                            if (isNewTurn) {
-                                // Small buffer for realism
-                                await new Promise(r => setTimeout(r, 800)); 
-                            }
+                            if (isNewTurn) await new Promise(r => setTimeout(r, 600)); 
 
                             nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
                             try {
@@ -198,7 +193,7 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                         }
                      }
 
-                     // Handle Transcription
+                     // Transcription
                      const serverContent = message.serverContent;
                      if (serverContent?.outputTranscription?.text) {
                          currentModelTextRef.current += serverContent.outputTranscription.text;
@@ -211,11 +206,7 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                          const userText = currentUserTextRef.current.trim();
                          const modelText = currentModelTextRef.current.trim();
 
-                         if (userText) {
-                             // Calculate words spoken and update stats
-                             const wordCount = userText.split(/\s+/).filter(w => w.length > 0).length;
-                             incrementWordsSpoken(wordCount);
-                         }
+                         if (userText) incrementWordsSpoken(userText.split(/\s+/).filter(w => w.length > 0).length);
 
                          if (userText || modelText) {
                              setMessages(prev => {
@@ -229,8 +220,7 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                          }
                      }
 
-                     const interrupted = message.serverContent?.interrupted;
-                     if (interrupted) {
+                     if (message.serverContent?.interrupted) {
                         sourcesRef.current.forEach(s => s.stop());
                         sourcesRef.current.clear();
                         nextStartTimeRef.current = 0;
@@ -247,9 +237,8 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                      console.error("Session Error:", e);
                      if (mountedRef.current) {
                          const msg = e.message || e.toString() || 'Unknown Error';
-                         // Handle 503 or Network errors during active session
                          if (msg.includes('503') || msg.includes('Network') || msg.includes('unavailable')) {
-                             setStatus('Connection unstable. Attempting to recover...');
+                             setStatus('Connection unstable...');
                          } else {
                              setStatus('Connection Interrupted');
                          }
@@ -263,57 +252,35 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                   speechConfig: {
                     voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
                   },
-                  systemInstruction: `
-                    You are "Pichi", a friendly and patient English tutor for Gujarati speakers.
-                    Your goal is to help the user practice spoken English.
-                    
-                    Guidelines:
-                    1. Speak clearly and slightly slower than normal.
-                    2. Primarily speak in English.
-                    3. If the user makes a significant grammar or pronunciation mistake, gently correct them.
-                    4. IMPORTANT: When explaining a mistake or giving a complex instruction, use Gujarati to ensure they understand.
-                    5. Keep the conversation engaging. Ask questions about their day, work, or hobbies.
-                    6. Be encouraging!
-                  `,
+                  systemInstruction: `You are Pichi, a friendly English tutor. Speak clearly. Correct mistakes gently in Gujarati if needed. Keep it engaging.`,
                 },
               });
           } catch (err: any) {
-              const isNetworkError = 
-                err.message?.includes('Network') || 
-                err.message?.includes('fetch') || 
-                err.message?.includes('503') || 
-                err.message?.includes('unavailable') ||
-                err.name === 'TypeError'; // fetch failures often throw TypeError
-
-              if (retries > 0 && isNetworkError) {
-                  setStatus(`Connection busy. Retrying... (${retries})`);
+              if (retries > 0 && (err.message?.includes('Network') || err.message?.includes('503') || err.name === 'TypeError')) {
+                  setStatus(`Retrying connection... (${retries})`);
                   await new Promise(r => setTimeout(r, delay));
-                  // Exponential backoff
                   return connectWithRetry(retries - 1, delay * 1.5);
               }
               throw err;
           }
       };
 
-      const sessionPromise = connectWithRetry(5, 1000); // 5 retries, starting at 1s
+      const sessionPromise = connectWithRetry(3, 1000);
       sessionPromiseRef.current = sessionPromise;
       await sessionPromise;
 
     } catch (err: any) {
       console.error("Start Session Error:", err);
       let errMsg = 'Could not connect.';
-      if (err.name === 'NotAllowedError') errMsg = 'Microphone access denied. Please enable permissions.';
-      if (err.name === 'NotFoundError') errMsg = 'No microphone found.';
+      if (err.name === 'NotAllowedError') errMsg = 'Microphone access denied.';
       if (!navigator.onLine) errMsg = 'No internet connection.';
       if (err.message && err.message.includes("API Key")) errMsg = "API Key Invalid or Missing.";
-      if (err.message && (err.message.includes("503") || err.message.includes("Network"))) errMsg = "Service busy or network error. Please try again.";
       
       setError(errMsg);
       setHasStarted(false);
       setIsActive(false);
       setStatus('');
       
-      // Cleanup partially initialized contexts
       try { inputAudioContextRef.current?.close(); } catch {}
       try { outputAudioContextRef.current?.close(); } catch {}
       try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
@@ -321,125 +288,142 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-900 bg-opacity-95 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden relative flex flex-col h-[85vh]">
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+      <div className="w-full max-w-lg bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-[40px] shadow-2xl overflow-hidden relative flex flex-col h-[85dvh] border border-white/10 ring-1 ring-white/5">
+        
         {/* Header */}
-        <div className="bg-orange-500 p-4 text-white flex justify-between items-center shrink-0">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Volume2 className="h-6 w-6" /> Pichi (AI Tutor)
-          </h2>
-          <button onClick={onClose} className="hover:bg-orange-600 p-1 rounded-full transition">
-            <XCircle className="h-6 w-6" />
-          </button>
+        <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-20">
+            <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center border border-orange-500/50 text-orange-400">
+                    <Volume2 size={20} />
+                </div>
+                <div>
+                    <h2 className="text-white font-bold text-lg leading-none">Pichi</h2>
+                    <p className="text-slate-400 text-xs font-medium mt-1">AI Language Tutor</p>
+                </div>
+            </div>
+            <button onClick={onClose} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition">
+                <X size={20} />
+            </button>
         </div>
 
         {!hasStarted ? (
             /* START SCREEN */
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gray-50 dark:bg-slate-950 space-y-6">
-                <div className="bg-orange-100 dark:bg-orange-900/30 p-6 rounded-full shadow-lg shadow-orange-100 dark:shadow-none animate-pulse">
-                    <Mic className="w-16 h-16 text-orange-600 dark:text-orange-400" />
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-8 relative overflow-hidden">
+                {/* Background Blobs */}
+                <div className="absolute top-1/4 -left-20 w-64 h-64 bg-indigo-600/20 rounded-full blur-3xl animate-blob"></div>
+                <div className="absolute bottom-1/4 -right-20 w-64 h-64 bg-orange-600/20 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+
+                <div className="relative z-10">
+                    <div className="w-32 h-32 mx-auto bg-gradient-to-tr from-orange-500 to-pink-600 rounded-full shadow-[0_0_40px_rgba(249,115,22,0.4)] flex items-center justify-center animate-float mb-6">
+                        <Mic className="w-14 h-14 text-white drop-shadow-md" />
+                    </div>
+                    
+                    <h3 className="text-3xl font-black text-white tracking-tight mb-2">Speak with Pichi</h3>
+                    <p className="text-slate-400 text-lg max-w-xs mx-auto">Practice real conversations. Improve fluency instantly.</p>
                 </div>
-                <div>
-                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Ready to practice?</h3>
-                    <p className="text-gray-500 dark:text-gray-400 mt-2">Pichi is ready to have a conversation with you.</p>
-                </div>
-                
+
                 {error && (
-                    <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl border border-red-100 dark:border-red-900 flex items-center gap-2 text-sm font-bold animate-shake">
+                    <div className="bg-red-500/10 text-red-400 px-4 py-3 rounded-2xl border border-red-500/20 flex items-center gap-2 text-sm font-bold animate-shake">
                         <AlertCircle size={16} /> {error}
                     </div>
                 )}
 
-                <button 
-                    onClick={startSession}
-                    className="bg-orange-600 text-white px-8 py-4 rounded-2xl font-bold text-lg shadow-xl shadow-orange-200 dark:shadow-none hover:bg-orange-700 transition flex items-center gap-3 active:scale-95"
-                >
-                    <Play fill="currentColor" size={20} />
-                    Start Conversation (શરૂ કરો)
-                </button>
-                <p className="text-xs text-gray-400">Microphone permission required</p>
+                <div className="mt-auto w-full z-10">
+                    <button 
+                        onClick={startSession}
+                        className="w-full bg-white text-slate-900 py-4 rounded-2xl font-black text-lg shadow-xl hover:scale-[1.02] transition-transform flex items-center justify-center gap-3"
+                    >
+                        <Play fill="currentColor" size={20} />
+                        Start Conversation
+                    </button>
+                    <p className="text-xs text-slate-600 mt-4">Headphones recommended</p>
+                </div>
             </div>
         ) : (
             /* ACTIVE SESSION UI */
-            <>
-                {/* Chat History */}
-                <div className="flex-1 bg-gray-50 dark:bg-slate-950 p-4 overflow-y-auto" ref={scrollRef}>
-                    {messages.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
-                            {status.includes('Connecting') || status.includes('Initializing') || status.includes('Retrying') ? (
-                                <Loader2 size={48} className="animate-spin text-orange-400 mb-2"/>
-                            ) : (
-                                <MessageSquare size={48} className="mb-2" />
-                            )}
-                            <p className="font-medium animate-pulse">{status.includes('Connecting') || status.includes('Retrying') ? status : "Start speaking..."}</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4 pb-2">
-                            {messages.map((msg) => (
-                                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[80%] p-3 rounded-2xl text-sm md:text-base ${
-                                        msg.role === 'user' 
-                                        ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-900 dark:text-orange-200 rounded-tr-none' 
-                                        : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-white rounded-tl-none shadow-sm'
-                                    }`}>
-                                        <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">
-                                            {msg.role === 'user' ? 'You' : 'Pichi'}
-                                        </span>
-                                        {msg.text}
-                                    </div>
-                                </div>
-                            ))}
+            <div className="flex-1 flex flex-col relative">
+                
+                {/* Chat Stream (Overlay on top) */}
+                <div className="flex-1 p-6 overflow-y-auto space-y-6 pt-24 mask-linear-fade" ref={scrollRef}>
+                    {messages.length === 0 && (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50 gap-4">
+                             {status.includes('Connecting') && <Loader2 className="animate-spin text-orange-500" size={32} />}
+                             <p className="font-medium tracking-wide text-sm uppercase">{status}</p>
                         </div>
                     )}
+                    {messages.map((msg) => (
+                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
+                            <div className={`max-w-[85%] p-4 rounded-3xl text-sm leading-relaxed shadow-sm ${
+                                msg.role === 'user' 
+                                ? 'bg-orange-600 text-white rounded-tr-sm' 
+                                : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-sm'
+                            }`}>
+                                {msg.text}
+                            </div>
+                        </div>
+                    ))}
                 </div>
 
-                {/* Status & Mic */}
-                <div className="p-6 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0">
-                    <div className="flex flex-col items-center justify-center gap-4">
-                        <div className={`relative rounded-full h-24 w-24 flex items-center justify-center transition-all duration-300 ${
-                            isActive 
-                              ? isAiSpeaking 
-                                ? 'bg-orange-50 dark:bg-orange-900/20 ring-4 ring-orange-200 dark:ring-orange-900/50 scale-105' // AI Speaking style
-                                : 'bg-green-50 dark:bg-green-900/20 ring-4 ring-green-200 dark:ring-green-900/50' // User Listening style
-                              : 'bg-gray-100 dark:bg-slate-800'
-                        }`}>
-                            {isActive ? (
-                                isAiSpeaking ? (
-                                    <div className="relative flex items-center justify-center w-full h-full">
-                                        {/* Waveform Animation for AI */}
-                                        <div className="absolute inset-0 rounded-full border-4 border-orange-400 opacity-20 animate-ping"></div>
-                                        <div className="absolute inset-0 rounded-full border-4 border-orange-400 opacity-20 animate-ping" style={{animationDelay: '0.3s'}}></div>
-                                        <Volume2 className="h-10 w-10 text-orange-600 dark:text-orange-400 relative z-10" />
-                                    </div>
-                                ) : (
-                                    <div className="relative flex items-center justify-center w-full h-full">
-                                        {/* Pulse for Mic Listening */}
-                                        <div className="absolute inset-0 rounded-full bg-green-400 opacity-10 animate-pulse"></div>
-                                        <Mic className="h-10 w-10 text-green-600 dark:text-green-400 relative z-10" />
-                                    </div>
-                                )
-                            ) : (
-                                <Loader2 className="h-10 w-10 text-gray-400 animate-spin" />
+                {/* Interactive Footer */}
+                <div className="p-6 bg-slate-900/50 backdrop-blur-lg border-t border-white/5 shrink-0 z-20">
+                    <div className="flex flex-col items-center gap-6">
+                        
+                        {/* THE ORB VISUALIZER */}
+                        <div className="relative w-24 h-24 flex items-center justify-center">
+                            {/* Outer Rings */}
+                            {isActive && (
+                                <>
+                                    <div className={`absolute inset-0 rounded-full border border-white/10 ${isAiSpeaking ? 'animate-ping duration-1000' : 'animate-pulse duration-2000'}`}></div>
+                                    <div className={`absolute -inset-4 rounded-full border border-white/5 ${isAiSpeaking ? 'animate-ping duration-1500 delay-100' : 'animate-pulse duration-2000 delay-300'}`}></div>
+                                </>
                             )}
+                            
+                            {/* Core Orb */}
+                            <div className={`w-20 h-20 rounded-full shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center transition-all duration-500 relative overflow-hidden ${
+                                isActive 
+                                    ? isAiSpeaking 
+                                        ? 'bg-gradient-to-tr from-orange-500 to-pink-500 scale-110 shadow-[0_0_50px_rgba(249,115,22,0.6)]' 
+                                        : 'bg-gradient-to-tr from-emerald-500 to-teal-500 shadow-[0_0_40px_rgba(16,185,129,0.4)]' 
+                                    : 'bg-slate-700'
+                            }`}>
+                                {isActive ? (
+                                    isAiSpeaking ? (
+                                        <div className="space-x-1 flex items-center h-4">
+                                            <div className="w-1 bg-white rounded-full h-3 animate-bounce"></div>
+                                            <div className="w-1 bg-white rounded-full h-5 animate-bounce delay-100"></div>
+                                            <div className="w-1 bg-white rounded-full h-3 animate-bounce delay-200"></div>
+                                        </div>
+                                    ) : (
+                                        <Mic className="w-8 h-8 text-white animate-pulse" />
+                                    )
+                                ) : (
+                                    <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
+                                )}
+                            </div>
                         </div>
-                        <div className="text-center transition-all duration-300">
-                            <h3 className={`font-bold text-xl ${isAiSpeaking ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
+
+                        {/* Status Text */}
+                        <div className="text-center space-y-1">
+                            <h3 className="font-bold text-white text-lg tracking-tight">
                                 {isActive 
-                                    ? isAiSpeaking ? "Pichi is Speaking..." : "Your Turn (તમારો વારો)" 
-                                    : status || "Connecting..."}
+                                    ? isAiSpeaking ? "Pichi is speaking..." : "Listening..." 
+                                    : status}
                             </h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 font-medium">
-                                {isAiSpeaking ? "Listening..." : "Pichi is listening to you..."}
+                            <p className="text-slate-400 text-xs font-medium">
+                                {isActive && !isAiSpeaking ? "Go ahead, say something." : ""}
                             </p>
                         </div>
-                    </div>
-                    <div className="mt-4 text-center text-xs text-gray-400">
-                      Speak freely. Pichi will correct you in Gujarati if needed.
-                      <br/>
-                      (બોલો, હું તમારી ભૂલ સુધારીશ)
+                        
+                        <button 
+                            onClick={onClose}
+                            className="bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 px-6 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 border border-slate-700 hover:border-red-500/50"
+                        >
+                            <StopCircle size={14} /> End Session
+                        </button>
                     </div>
                 </div>
-            </>
+            </div>
         )}
       </div>
     </div>

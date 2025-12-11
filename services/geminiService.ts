@@ -410,20 +410,28 @@ export const generatePhraseOfTheDay = async (): Promise<any> => {
   }
 };
 
-export const generateGameData = async (gameType: 'scramble' | 'rapidFire', count: number = 5): Promise<any[]> => {
+export const generateGameData = async (
+    gameType: 'scramble' | 'rapidFire', 
+    count: number = 5,
+    difficulty: 'easy' | 'medium' | 'hard' = 'medium'
+): Promise<any[]> => {
     try {
         return await retryOperation(async () => {
             const ai = getAiClient();
             let prompt = "";
             
             if (gameType === 'scramble') {
+                const diffDesc = difficulty === 'easy' ? 'simple 3-4 letter' : difficulty === 'medium' ? 'common 5-6 letter' : 'complex 7+ letter';
                 prompt = `
                   Generate ${count} "Word Scramble" items (English word + Gujarati hint).
+                  Level: ${difficulty} (${diffDesc} words).
                   Output JSON Array: [{ "word": "APPLE", "hint": "સફરજન", "scrambled": "ELPPA" }]
                 `;
             } else if (gameType === 'rapidFire') {
+                const diffDesc = difficulty === 'easy' ? 'basic phrases' : difficulty === 'medium' ? 'intermediate sentences' : 'advanced idioms or business english';
                 prompt = `
                   Generate ${count} translation multiple choice questions.
+                  Level: ${difficulty} (${diffDesc}).
                   Output JSON Array: [{ "question": "Hi", "options": ["નમસ્તે", "આવજો"], "correctIndex": 0 }]
                 `;
             }

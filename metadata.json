@@ -1,6 +1,6 @@
 {
-  "name": "TalkSmart Gujarat",
-  "description": "AI-powered spoken English learning application tailored for Gujarati speakers, featuring a real-time voice tutor and structured lessons.",
+  "name": "SpeakMate",
+  "description": "Your everyday AI English speaking partner. Practice real-life conversations without hesitation.",
   "requestFramePermissions": [
     "microphone"
   ]

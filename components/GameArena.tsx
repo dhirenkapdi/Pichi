@@ -3,8 +3,11 @@ import { generateGameData } from '../services/geminiService';
 import { Gamepad2, Timer, Trophy, Zap, RefreshCw, Loader2, Star, MoveLeft, Check, X, AlertCircle } from 'lucide-react';
 import { addXp } from '../utils/progressUtils';
 
+type Difficulty = 'easy' | 'medium' | 'hard';
+
 const GameArena: React.FC = () => {
   const [activeGame, setActiveGame] = useState<'menu' | 'scramble' | 'rapidFire'>('menu');
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [loading, setLoading] = useState(false);
   const [gameData, setGameData] = useState<any[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -20,6 +23,7 @@ const GameArena: React.FC = () => {
 
   // Rapid Fire State
   const [timeLeft, setTimeLeft] = useState(10);
+  const [initialTime, setInitialTime] = useState(10);
   const [timerActive, setTimerActive] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
 
@@ -27,7 +31,7 @@ const GameArena: React.FC = () => {
 
   const startGame = async (type: 'scramble' | 'rapidFire') => {
     setLoading(true);
-    const data = await generateGameData(type, 5); // Fetch 5 rounds
+    const data = await generateGameData(type, 5, difficulty); // Fetch 5 rounds with selected difficulty
     setGameData(data);
     setActiveGame(type);
     setCurrentQuestionIndex(0);
@@ -52,7 +56,13 @@ const GameArena: React.FC = () => {
   };
 
   const initRapidFireRound = () => {
-      setTimeLeft(10);
+      // Set timer based on difficulty
+      let time = 10;
+      if (difficulty === 'easy') time = 15;
+      if (difficulty === 'hard') time = 5;
+      
+      setInitialTime(time);
+      setTimeLeft(time);
       setTimerActive(true);
       setFeedback(null);
       setSelectedOption(null);
@@ -70,6 +80,12 @@ const GameArena: React.FC = () => {
 
   // --- HANDLERS ---
 
+  const getDifficultyMultiplier = () => {
+      if (difficulty === 'easy') return 1;
+      if (difficulty === 'hard') return 2;
+      return 1.5;
+  };
+
   const handleScrambleClick = (charObj: {char: string, id: number}) => {
      if (feedback) return; // Prevent clicks during feedback
      setScrambleInput(prev => [...prev, charObj.char]);
@@ -86,15 +102,15 @@ const GameArena: React.FC = () => {
       const attempt = scrambleInput.join('');
       
       if (attempt === currentWord) {
-          setScore(prev => prev + 10);
+          const basePoints = 10;
+          const points = Math.round(basePoints * getDifficultyMultiplier());
+          setScore(prev => prev + points);
           setFeedback('success');
-          // Delay to show success state before next round
           setTimeout(() => {
             nextRound();
           }, 1000);
       } else {
           setFeedback('error');
-          // Delay to show error state before resetting
           setTimeout(() => {
             setFeedback(null);
             resetScrambleInput();
@@ -110,7 +126,12 @@ const GameArena: React.FC = () => {
       const correctIndex = gameData[currentQuestionIndex].correctIndex;
       
       if (index === correctIndex) {
-          setScore(prev => prev + 10 + Math.ceil(timeLeft / 2)); // Bonus for speed
+          const basePoints = 10;
+          // Bonus for speed (more time left = more points)
+          const speedBonus = Math.ceil((timeLeft / initialTime) * 5);
+          const totalPoints = Math.round((basePoints + speedBonus) * getDifficultyMultiplier());
+          
+          setScore(prev => prev + totalPoints);
           setFeedback('success');
       } else {
           setFeedback('error');
@@ -155,11 +176,30 @@ const GameArena: React.FC = () => {
   if (activeGame === 'menu') {
       return (
         <div className="max-w-4xl mx-auto animate-fade-in space-y-8">
-            <div>
-                <h2 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight flex items-center gap-3">
-                    <Gamepad2 className="text-purple-600" size={32} /> Game Arena
-                </h2>
-                <p className="text-slate-500 dark:text-slate-400 mt-1">Learn while you play. Earn XP!</p>
+            <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight flex items-center gap-3">
+                        <Gamepad2 className="text-purple-600" size={32} /> Game Arena
+                    </h2>
+                    <p className="text-slate-600 dark:text-slate-400 mt-1">Learn while you play. Earn XP!</p>
+                </div>
+                
+                {/* Difficulty Selector */}
+                <div className="bg-white dark:bg-slate-800 p-1 rounded-xl inline-flex shadow-sm border border-slate-200 dark:border-slate-700">
+                    {(['easy', 'medium', 'hard'] as const).map((level) => (
+                        <button
+                            key={level}
+                            onClick={() => setDifficulty(level)}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold capitalize transition-all ${
+                                difficulty === level
+                                ? 'bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-white shadow-sm'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                            }`}
+                        >
+                            {level}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
@@ -175,7 +215,17 @@ const GameArena: React.FC = () => {
                             <RefreshCw size={28} />
                         </div>
                         <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Word Scramble</h3>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium">Unjumble letters to find the English word. Great for spelling!</p>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium mb-4">Unjumble letters to find the word.</p>
+                        
+                        <div className="flex gap-2 text-xs font-bold text-slate-500 dark:text-slate-500">
+                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
+                                {difficulty === 'easy' ? '3-4 Letters' : difficulty === 'medium' ? '5-6 Letters' : '7+ Letters'}
+                             </span>
+                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
+                                {getDifficultyMultiplier()}x XP
+                             </span>
+                        </div>
+
                         <div className="mt-6 inline-flex items-center text-sm font-bold text-purple-600 dark:text-purple-400">
                              Play Now <MoveLeft className="ml-2 rotate-180" size={16}/>
                         </div>
@@ -194,7 +244,17 @@ const GameArena: React.FC = () => {
                             <Timer size={28} />
                         </div>
                         <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Rapid Fire</h3>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium">Race against the clock! Choose the correct translation in 10s.</p>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium mb-4">Race against the clock!</p>
+                        
+                        <div className="flex gap-2 text-xs font-bold text-slate-500 dark:text-slate-500">
+                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
+                                {difficulty === 'easy' ? '15s Timer' : difficulty === 'medium' ? '10s Timer' : '5s Timer'}
+                             </span>
+                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
+                                {getDifficultyMultiplier()}x XP
+                             </span>
+                        </div>
+
                         <div className="mt-6 inline-flex items-center text-sm font-bold text-orange-600 dark:text-orange-400">
                              Play Now <MoveLeft className="ml-2 rotate-180" size={16}/>
                         </div>
@@ -205,7 +265,7 @@ const GameArena: React.FC = () => {
             {loading && (
                 <div className="fixed inset-0 bg-white/80 dark:bg-slate-950/80 z-50 flex flex-col items-center justify-center backdrop-blur-sm">
                     <Loader2 size={48} className="text-indigo-600 animate-spin mb-4" />
-                    <p className="font-bold text-xl text-slate-800 dark:text-white">Generating Game Level...</p>
+                    <p className="font-bold text-xl text-slate-800 dark:text-white">Generating {difficulty} level...</p>
                 </div>
             )}
         </div>
@@ -215,14 +275,15 @@ const GameArena: React.FC = () => {
   // --- GAME OVER VIEW ---
   if (gameOver) {
       return (
-          <div className="max-w-md mx-auto mt-12 bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-xl text-center border border-slate-100 dark:border-slate-800 animate-scale-in">
+          <div className="max-w-md mx-auto mt-12 bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-xl text-center border border-slate-200 dark:border-slate-800 animate-scale-in">
               <div className="w-24 h-24 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-6 text-yellow-500 animate-bounce">
                   <Trophy size={48} fill="currentColor" />
               </div>
               <h2 className="text-3xl font-black text-slate-800 dark:text-white mb-2">Game Over!</h2>
+              <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">{difficulty} mode</div>
               <p className="text-slate-500 dark:text-slate-400 mb-8">You scored <span className="text-indigo-600 font-bold">{score} XP</span></p>
               
-              <button onClick={exitGame} className="w-full bg-slate-800 dark:bg-white text-white dark:text-slate-900 font-bold py-4 rounded-2xl hover:bg-black dark:hover:bg-slate-200 transition">
+              <button onClick={exitGame} className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-4 rounded-2xl hover:bg-black dark:hover:bg-slate-200 transition">
                   Back to Menu
               </button>
           </div>
@@ -234,13 +295,13 @@ const GameArena: React.FC = () => {
       <div className="max-w-2xl mx-auto h-[600px] flex flex-col">
           {/* Game Header */}
           <div className="flex justify-between items-center mb-8">
-               <button onClick={exitGame} className="text-slate-400 hover:text-slate-600 p-2 font-bold flex items-center gap-2"><X size={20}/> Quit</button>
+               <button onClick={exitGame} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 font-bold flex items-center gap-2"><X size={20}/> Quit</button>
                <div className="flex items-center gap-4">
                    <div className="bg-yellow-100 dark:bg-yellow-900/30 px-4 py-2 rounded-xl text-yellow-600 dark:text-yellow-400 font-bold flex items-center gap-2">
                        <Zap size={18} fill="currentColor" /> {score}
                    </div>
                    {activeGame === 'rapidFire' && (
-                       <div className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 ${timeLeft < 4 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+                       <div className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors duration-300 ${timeLeft < 4 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
                            <Timer size={18} /> {timeLeft}s
                        </div>
                    )}
@@ -253,7 +314,7 @@ const GameArena: React.FC = () => {
                   <div className="text-center space-y-8 animate-fade-in-up">
                       <div>
                           <p className="text-sm font-bold text-purple-500 uppercase tracking-widest mb-2">Hint</p>
-                          <h3 className="text-2xl font-bold text-slate-700 dark:text-slate-200">{gameData[currentQuestionIndex].hint}</h3>
+                          <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-200">{gameData[currentQuestionIndex].hint}</h3>
                       </div>
 
                       {/* Scramble Input Area with Visual Feedback */}
@@ -338,7 +399,7 @@ const GameArena: React.FC = () => {
                   </div>
               )}
           </div>
-          <div className="text-center py-4 text-xs font-bold text-slate-300 uppercase tracking-widest">
+          <div className="text-center py-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
               Question {currentQuestionIndex + 1} / {gameData.length}
           </div>
       </div>

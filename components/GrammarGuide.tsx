@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, CheckCircle, AlertCircle, ChevronRight, Play, RotateCcw, Award, ArrowLeft, Sparkles, Send, BrainCircuit, Search, GraduationCap, Library, X, ArrowRight as ArrowRightIcon, PlusCircle, Loader2, List, HelpCircle, AlertTriangle } from 'lucide-react';
+import { BookOpen, CheckCircle, AlertCircle, ChevronRight, Play, RotateCcw, Award, ArrowLeft, Sparkles, Send, BrainCircuit, Search, GraduationCap, Library, X, ArrowRight as ArrowRightIcon, PlusCircle, Loader2, List, HelpCircle, AlertTriangle, Lock } from 'lucide-react';
 import { grammarCourseData, GrammarChapter, GrammarExercise } from './GrammarCourseData';
 import { explainGrammarTopic, checkGrammarPractice, generateGrammarExercises } from '../services/geminiService';
 import { addXp } from '../utils/progressUtils';
@@ -727,23 +727,85 @@ const StructuredCourse: React.FC = () => {
   const isAllCorrect = activeChapter && currentExercises.length > 0 && Object.values(results).length === currentExercises.length && Object.values(results).every(Boolean);
 
   if (view === 'list' || !activeChapter) {
+    const basicChapters = grammarCourseData.filter(c => c.level === 'Basic');
+    const intermediateChapters = grammarCourseData.filter(c => c.level === 'Intermediate');
+
     return (
-      <div className="grid md:grid-cols-2 gap-4 animate-fade-in-up">
-            {grammarCourseData.map((chapter) => (
-                <button 
-                    key={chapter.id}
-                    onClick={() => handleChapterClick(chapter)}
-                    className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 hover:border-purple-500/50 hover:shadow-lg transition-all group text-left"
-                >
-                    <div>
-                        <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg group-hover:text-purple-500 transition-colors">{chapter.title}</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{chapter.description}</p>
+      <div className="animate-fade-in-up space-y-12">
+            {/* Basic Level Section */}
+            <div>
+                 <div className="flex items-center gap-3 mb-6 px-2">
+                    <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-emerald-200 dark:border-emerald-500/30">Level 1</span>
+                    <h3 className="text-2xl font-black text-slate-800 dark:text-white">Basic Grammar</h3>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                    {basicChapters.map((chapter) => (
+                        <button 
+                            key={chapter.id}
+                            onClick={() => handleChapterClick(chapter)}
+                            className="group relative flex items-center justify-between bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 hover:-translate-y-1 hover:shadow-xl transition-all text-left overflow-hidden"
+                        >
+                            <div className={`absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b ${chapter.color}`}></div>
+                            <div className="flex-1 p-5 pl-7">
+                                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{chapter.title}</h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">{chapter.description}</p>
+                            </div>
+                            <div className={`w-12 h-12 mr-5 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-white transition-all group-hover:scale-110 shadow-sm group-hover:shadow-md`} style={{}}>
+                                <div className={`absolute inset-0 rounded-full bg-gradient-to-br ${chapter.color} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
+                                <ChevronRight size={20} className="relative z-10" />
+                            </div>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Intermediate Section */}
+            <div>
+                 <div className="flex items-center gap-3 mb-6 px-2">
+                    <span className="bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-indigo-200 dark:border-indigo-500/30">Level 2</span>
+                    <h3 className="text-2xl font-black text-slate-800 dark:text-white">Intermediate Grammar</h3>
+                </div>
+                {intermediateChapters.length > 0 ? (
+                    <div className="grid md:grid-cols-2 gap-4">
+                        {intermediateChapters.map((chapter) => (
+                            <button 
+                                key={chapter.id}
+                                onClick={() => handleChapterClick(chapter)}
+                                className="group relative flex items-center justify-between bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 hover:-translate-y-1 hover:shadow-xl transition-all text-left overflow-hidden"
+                            >
+                                <div className={`absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b ${chapter.color}`}></div>
+                                <div className="flex-1 p-5 pl-7">
+                                    <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">{chapter.title}</h3>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">{chapter.description}</p>
+                                </div>
+                                <div className={`w-12 h-12 mr-5 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-white transition-all group-hover:scale-110 shadow-sm group-hover:shadow-md`} style={{}}>
+                                    <div className={`absolute inset-0 rounded-full bg-gradient-to-br ${chapter.color} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
+                                    <ChevronRight size={20} className="relative z-10" />
+                                </div>
+                            </button>
+                        ))}
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-purple-500 group-hover:text-white transition-all">
-                        <ChevronRight size={20} />
+                ) : (
+                    <div className="opacity-60 grayscale filter pointer-events-none">
+                        <div className="grid md:grid-cols-2 gap-4">
+                             <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 border-dashed flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800"></div>
+                                <div className="space-y-2 flex-1">
+                                    <div className="h-4 w-1/3 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                                    <div className="h-3 w-2/3 bg-slate-100 dark:bg-slate-800/50 rounded"></div>
+                                </div>
+                             </div>
+                             <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 border-dashed flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800"></div>
+                                <div className="space-y-2 flex-1">
+                                    <div className="h-4 w-1/3 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                                    <div className="h-3 w-2/3 bg-slate-100 dark:bg-slate-800/50 rounded"></div>
+                                </div>
+                             </div>
+                        </div>
                     </div>
-                </button>
-            ))}
+                )}
+            </div>
       </div>
     );
   }
@@ -899,7 +961,7 @@ const StructuredCourse: React.FC = () => {
                                         <button 
                                             onClick={handleMoreQuestions}
                                             disabled={loadingMore}
-                                            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition flex items-center gap-2"
+                                            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition flex items-center justify-center gap-2"
                                         >
                                             {loadingMore ? <Loader2 className="animate-spin" size={20}/> : <PlusCircle size={20} />}
                                             More Questions

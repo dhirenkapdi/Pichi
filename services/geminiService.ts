@@ -296,6 +296,42 @@ export const explainGrammarTopic = async (topic: string): Promise<string> => {
   }
 };
 
+export const generateGrammarExercises = async (topic: string, description: string): Promise<any[]> => {
+  try {
+    return await retryOperation(async () => {
+      const ai = getAiClient();
+      const prompt = `
+        Generate 5 English grammar exercises for the topic: "${topic}" - ${description}.
+        Target Audience: Gujarati speakers learning English.
+        
+        Output ONLY raw JSON array with this structure:
+        [
+          {
+            "id": "unique_id_${Date.now()}_1",
+            "question": "Instruction label (e.g. '(run)', '(my)') or empty string",
+            "beforeInput": "Text before blank (e.g. 'She')",
+            "afterInput": "Text after blank (e.g. 'to the store.')",
+            "correctAnswers": ["runs"],
+            "placeholder": "...",
+            "explanation": "Brief explanation why this is correct."
+          }
+        ]
+      `;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: { responseMimeType: 'application/json' }
+      });
+
+      return cleanAndParseJson(response.text || "[]", []);
+    });
+  } catch (error) {
+    console.error("Grammar Gen API Error:", error);
+    return [];
+  }
+};
+
 export const checkGrammarPractice = async (sentence: string, topic: string): Promise<any> => {
   try {
     return await retryOperation(async () => {

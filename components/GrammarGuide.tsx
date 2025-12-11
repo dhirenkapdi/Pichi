@@ -205,12 +205,11 @@ const GrammarReference: React.FC = () => {
         <button
             key={tense.name}
             onClick={() => { setSelectedTense(tense); resetPractice(); }}
-            className="group relative bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 hover:-translate-y-1 hover:shadow-xl transition-all text-left overflow-hidden h-44 flex flex-col"
+            className="group relative bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 hover:-translate-y-1 hover:shadow-xl transition-all text-left overflow-hidden h-40 flex flex-col"
         >
             <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${tense.color} opacity-10 rounded-bl-[40px] group-hover:scale-125 transition-transform duration-500`}></div>
             <h3 className="text-lg font-black text-slate-800 dark:text-white mb-1">{tense.name}</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 font-medium line-clamp-2 leading-snug">{tense.usage}</p>
-            <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-2 line-clamp-1 opacity-80">{tense.gujaratiExplanation}</p>
             <div className="mt-auto pt-2 flex items-center text-xs font-bold text-slate-400 group-hover:text-slate-800 dark:group-hover:text-white transition-colors uppercase tracking-wider">
                 Learn Rule <ChevronRight size={14} className="ml-1" />
             </div>

@@ -494,3 +494,41 @@ export const generateGameData = async (
         return [];
     }
 }
+
+export const generateCrosswordData = async (topic: string): Promise<any[]> => {
+  try {
+      return await retryOperation(async () => {
+          const ai = getAiClient();
+          const prompt = `
+            Generate 20 English vocabulary words related to the topic: "${topic}".
+            For each word, provide a clear, educational clue (definition) suitable for an English learner.
+            
+            Constraints:
+            - Words must be single words (no spaces).
+            - Words must be between 3 and 10 letters long.
+            - Provide a mix of common and slightly advanced words for the topic.
+            
+            Output ONLY valid JSON array:
+            [
+              { "word": "APPLE", "clue": "A round fruit with red or green skin and white inside." },
+              { "word": "BANANA", "clue": "A long curved fruit with yellow skin." }
+            ]
+          `;
+          
+          const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: prompt,
+              config: { responseMimeType: 'application/json' }
+          });
+          
+          const data = cleanAndParseJson(response.text || "[]", []);
+          return data.map((item: any) => ({
+             word: item.word.toUpperCase().replace(/[^A-Z]/g, ''),
+             clue: item.clue
+          }));
+      });
+  } catch (error) {
+      console.error("Crossword API Error:", error);
+      return [];
+  }
+}

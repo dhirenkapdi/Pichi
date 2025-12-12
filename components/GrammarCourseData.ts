@@ -17,7 +17,7 @@ export interface GrammarChapter {
   description: string;
   rules: React.ReactNode;
   exercises: GrammarExercise[];
-  level: 'Basic' | 'Intermediate';
+  level: 'Basic' | 'Intermediate' | 'Advanced';
   color: string;
 }
 
@@ -29,7 +29,7 @@ export const grammarCourseData: GrammarChapter[] = [
     description: "Rules for making nouns plural (s, es, ies, ves)",
     level: "Basic",
     color: "from-emerald-500 to-teal-500",
-    rules: "1) **Singular + s**: parrot → parrots, apple → apples.\n\n2) **Ending in y** (consonant before y) → **ies**: lolly → lollies, story → stories. (BUT: boy → boys).\n\n3) **Ending in ch, x, s, sh, o** → **es**: class → classes, box → boxes, brush → brushes.\n\n4) **Ending in f, fe, lf** → **ves**: knife → knives, wolf → wolves, life → lives.\n\n5) **Irregular**: man → men, woman → women, child → children, foot → feet, tooth → teeth, mouse → mice, person → people.",
+    rules: "**Core Concept**\n**Singular**: Represents **one** person, place, or thing (e.g., *a book, one cat*).\n**Plural**: Represents **more than one** (e.g., *two books, many cats*).\n\n**1. Standard Rules**\n- **Add -s**: Most nouns simply take an -s.\n  *(cat → cats, house → houses)*\n- **Add -es**: Words ending in **-s, -sh, -ch, -x, -o**.\n  *(bus → buses, box → boxes, potato → potatoes)*\n- **Change -y to -ies**: When a word ends in a **consonant + y**.\n  *(baby → babies, city → cities)*\n  *Note: If it ends in vowel + y, just add -s (boy → boys).*\n- **Change -f/-fe to -ves**: Words ending in f or fe.\n  *(knife → knives, life → lives, wolf → wolves)*\n\n**2. Irregular Plurals**\nThese words change form completely and must be memorized:\n- man → **men**\n- woman → **women**\n- child → **children**\n- mouse → **mice**\n- foot → **feet**\n- tooth → **teeth**\n- person → **people**\n\n**3. Special Cases**\n- **The Plural of 'One'**: We use **ones** as a pronoun to avoid repeating a noun.\n  *(e.g., 'I like the red apples, not the green **ones**.')*\n- **Numbers**: Numbers other than 1 (including 0, decimals, and negatives) usually take the plural noun form.\n  *(e.g., '0 degrees', '-1 points', '1.5 hours').*",
     exercises: [
       { id: "p1", question: "", beforeInput: "an apple → 5", correctAnswers: ["apples"], placeholder: "...", explanation: "Most nouns simply add -s." },
       { id: "p2", question: "", beforeInput: "a city → 3", correctAnswers: ["cities"], placeholder: "...", explanation: "Nouns ending in consonant + y change y to -ies." },
@@ -526,6 +526,191 @@ export const grammarCourseData: GrammarChapter[] = [
       { id: "irr_3", question: "know (Progressive?)", beforeInput: "I", afterInput: "him. (am knowing / know)", correctAnswers: ["know"], placeholder: "...", explanation: "Know is non-progressive." },
       { id: "irr_4", question: "buy (Past)", beforeInput: "She", afterInput: "a hat.", correctAnswers: ["bought"], placeholder: "...", explanation: "Past of buy." },
       { id: "irr_5", question: "understand (Progressive?)", beforeInput: "I", afterInput: "you. (am understanding / understand)", correctAnswers: ["understand"], placeholder: "...", explanation: "Understand is non-progressive." }
+    ]
+  },
+  
+  // --- ADVANCED LEVEL (CEFR A2/B1) - ENGLISH-4U.DE ---
+  {
+    id: "adv-1",
+    title: "34. Asking Questions",
+    description: "Who, What, Where, When, Why, How",
+    level: "Advanced",
+    color: "from-rose-500 to-red-600",
+    rules: "**Subject Questions** (Who/What): No auxiliary verb.\n*Who opened the door?*\n\n**Object Questions**: Use do/does/did.\n*Who did they greet?*\n\n**Question Words**:\n- **Whose**: Possession (*Whose pen is this?*)\n- **How long**: Duration\n- **How often**: Frequency\n- **How much/many**: Quantity",
+    exercises: [
+      { id: "aq_1", question: "", beforeInput: "The children go to the mall.", afterInput: "goes to the mall?", correctAnswers: ["Who"], placeholder: "...", explanation: "Subject question (people) -> Who." },
+      { id: "aq_2", question: "", beforeInput: "They sell 20 kilos.", afterInput: "kilos do they sell?", correctAnswers: ["How many"], placeholder: "...", explanation: "Quantity (countable) -> How many." },
+      { id: "aq_3", question: "", beforeInput: "He flew to Manchester.", afterInput: "did he fly?", correctAnswers: ["Where"], placeholder: "...", explanation: "Place -> Where." },
+      { id: "aq_4", question: "", beforeInput: "I saw her yesterday.", afterInput: "did you see her?", correctAnswers: ["When"], placeholder: "...", explanation: "Time -> When." },
+      { id: "aq_5", question: "", beforeInput: "This is Peter's pencil.", afterInput: "pencil is this?", correctAnswers: ["Whose"], placeholder: "...", explanation: "Possession -> Whose." },
+      { id: "aq_6", question: "", beforeInput: "He stayed home because he was ill.", afterInput: "did he stay home?", correctAnswers: ["Why"], placeholder: "...", explanation: "Reason -> Why." }
+    ]
+  },
+  {
+    id: "adv-2",
+    title: "35. Adjectives with Prepositions",
+    description: "Nice of, Angry about, Good at...",
+    level: "Advanced",
+    color: "from-red-600 to-orange-600",
+    rules: "Certain adjectives are followed by specific prepositions:\n- **OF**: nice, kind, stupid, proud, afraid, fond\n- **TO**: married, rude, similar\n- **AT**: good, bad, surprised\n- **ABOUT**: angry, excited, sorry\n- **WITH**: bored, fed up, pleased",
+    exercises: [
+      { id: "adj_prep_1", question: "", beforeInput: "She is brilliant", afterInput: "repairing things.", correctAnswers: ["at"], placeholder: "...", explanation: "Brilliant/Good at doing something." },
+      { id: "adj_prep_2", question: "", beforeInput: "He is married", afterInput: "his friend's sister.", correctAnswers: ["to"], placeholder: "...", explanation: "Married to someone." },
+      { id: "adj_prep_3", question: "", beforeInput: "She is afraid", afterInput: "spiders.", correctAnswers: ["of"], placeholder: "...", explanation: "Afraid of something." },
+      { id: "adj_prep_4", question: "", beforeInput: "I am interested", afterInput: "football.", correctAnswers: ["in"], placeholder: "...", explanation: "Interested in something." },
+      { id: "adj_prep_5", question: "", beforeInput: "Are you excited", afterInput: "the holiday?", correctAnswers: ["about"], placeholder: "...", explanation: "Excited about something." },
+      { id: "adj_prep_6", question: "", beforeInput: "It was nice", afterInput: "you to help me.", correctAnswers: ["of"], placeholder: "...", explanation: "Nice of someone." }
+    ]
+  },
+  {
+    id: "adv-3",
+    title: "36. Conditional Clauses",
+    description: "Zero, First, Second, and Third Conditionals",
+    level: "Advanced",
+    color: "from-orange-600 to-amber-600",
+    rules: "**Zero**: General truths (If + Present, Present).\n**First**: Real possibility (If + Present, Will).\n**Second**: Unreal present (If + Past, Would).\n**Third**: Unreal past (If + Past Perfect, Would have V3).",
+    exercises: [
+      { id: "cond_1", question: "(rain/get)", beforeInput: "If it rains, you", afterInput: "wet.", correctAnswers: ["will get"], placeholder: "...", explanation: "First Conditional: Real possibility." },
+      { id: "cond_2", question: "(have/buy)", beforeInput: "If I", afterInput: "enough money, I would buy a car.", correctAnswers: ["had"], placeholder: "...", explanation: "Second Conditional: Unreal/Hypothetical." },
+      { id: "cond_3", question: "(study/pass)", beforeInput: "If he had studied, he", afterInput: "the exam.", correctAnswers: ["would have passed"], placeholder: "...", explanation: "Third Conditional: Past unreal." },
+      { id: "cond_4", question: "(heat/boil)", beforeInput: "If you heat water to 100°C, it", afterInput: ".", correctAnswers: ["boils"], placeholder: "...", explanation: "Zero Conditional: Scientific fact." },
+      { id: "cond_5", question: "(be/go)", beforeInput: "If I", afterInput: "you, I wouldn't do that.", correctAnswers: ["were", "was"], placeholder: "...", explanation: "Second Conditional: Advice (If I were you)." },
+      { id: "cond_6", question: "(not/tell)", beforeInput: "She will be angry if you", afterInput: "the truth.", correctAnswers: ["do not tell", "don't tell"], placeholder: "...", explanation: "First Conditional (Negative)." }
+    ]
+  },
+  {
+    id: "adv-4",
+    title: "37. Advanced Future Tenses",
+    description: "Will, Going to, Present Progressive, Present Simple",
+    level: "Advanced",
+    color: "from-amber-600 to-yellow-600",
+    rules: "**Will**: Predictions, promises, spontaneous decisions.\n**Going to**: Plans, intentions, evidence.\n**Present Progressive**: Fixed arrangements (*I'm meeting him tonight*).\n**Present Simple**: Timetables (*The train leaves at 5*).",
+    exercises: [
+      { id: "afut_1", question: "(meet)", beforeInput: "I", afterInput: "them tomorrow evening. (Plan)", correctAnswers: ["am going to meet", "am meeting"], placeholder: "...", explanation: "Plan/Arrangement." },
+      { id: "afut_2", question: "(help)", beforeInput: "I think he", afterInput: "you.", correctAnswers: ["will help"], placeholder: "...", explanation: "Prediction/Opinion." },
+      { id: "afut_3", question: "(leave)", beforeInput: "The train", afterInput: "at 10:20.", correctAnswers: ["leaves"], placeholder: "...", explanation: "Timetable -> Present Simple." },
+      { id: "afut_4", question: "(rain)", beforeInput: "Look at the clouds! It", afterInput: ".", correctAnswers: ["is going to rain"], placeholder: "...", explanation: "Evidence -> Going to." },
+      { id: "afut_5", question: "(phone)", beforeInput: "I promise I", afterInput: "you.", correctAnswers: ["will phone"], placeholder: "...", explanation: "Promise -> Will." }
+    ]
+  },
+  {
+    id: "adv-5",
+    title: "38. Passive Voice",
+    description: "Form of 'to be' + Past Participle",
+    level: "Advanced",
+    color: "from-yellow-600 to-lime-600",
+    rules: "Active: Subject + Verb + Object.\nPassive: Object + be + V3 + (by Agent).\n\n*Simple Present*: is/are cleaned\n*Simple Past*: was/were cleaned\n*Future*: will be cleaned\n*Perfect*: has/have been cleaned",
+    exercises: [
+      { id: "pass_1", question: "Present", beforeInput: "The room", afterInput: "every day. (clean)", correctAnswers: ["is cleaned"], placeholder: "...", explanation: "Present Passive." },
+      { id: "pass_2", question: "Past", beforeInput: "This house", afterInput: "in 1900. (build)", correctAnswers: ["was built"], placeholder: "...", explanation: "Past Passive." },
+      { id: "pass_3", question: "Future", beforeInput: "The letter", afterInput: "tomorrow. (send)", correctAnswers: ["will be sent"], placeholder: "...", explanation: "Future Passive." },
+      { id: "pass_4", question: "Present Perfect", beforeInput: "The car", afterInput: ". (steal)", correctAnswers: ["has been stolen"], placeholder: "...", explanation: "Perfect Passive." },
+      { id: "pass_5", question: "Active->Passive", beforeInput: "Someone stole my bike. -> My bike", afterInput: ".", correctAnswers: ["was stolen"], placeholder: "...", explanation: "Transform to passive." }
+    ]
+  },
+  {
+    id: "adv-6",
+    title: "39. Reported Speech",
+    description: "Backshifting Tenses",
+    level: "Advanced",
+    color: "from-lime-600 to-green-600",
+    rules: "When reporting statements from the past, tenses usually shift back:\n- Present -> Past\n- Past -> Past Perfect\n- Will -> Would\n- Can -> Could\n\n*He said, 'I am happy'* -> *He said that he was happy.*",
+    exercises: [
+      { id: "rep_1", question: "'I am tired.'", beforeInput: "He said that he", afterInput: "tired.", correctAnswers: ["was"], placeholder: "...", explanation: "am -> was." },
+      { id: "rep_2", question: "'I like coffee.'", beforeInput: "She said that she", afterInput: "coffee.", correctAnswers: ["liked"], placeholder: "...", explanation: "like -> liked." },
+      { id: "rep_3", question: "'I went to the cinema.'", beforeInput: "She said she", afterInput: "to the cinema.", correctAnswers: ["had gone"], placeholder: "...", explanation: "went -> had gone." },
+      { id: "rep_4", question: "'I will help you.'", beforeInput: "He said he", afterInput: "help me.", correctAnswers: ["would"], placeholder: "...", explanation: "will -> would." },
+      { id: "rep_5", question: "'Where do you live?'", beforeInput: "He asked me where I", afterInput: ".", correctAnswers: ["lived"], placeholder: "...", explanation: "Question backshift." }
+    ]
+  },
+  {
+    id: "adv-7",
+    title: "40. Present Perfect Progressive",
+    description: "Have/Has been + ing",
+    level: "Advanced",
+    color: "from-green-600 to-emerald-600",
+    rules: "Action started in the past and is still continuing, or has just finished with a result in the present.\n**Structure**: have/has + been + verb-ing\n*It has been raining for hours.*",
+    exercises: [
+      { id: "ppp_1", question: "(rain)", beforeInput: "It", afterInput: "for hours.", correctAnswers: ["has been raining"], placeholder: "...", explanation: "Continuous action." },
+      { id: "ppp_2", question: "(wait)", beforeInput: "I", afterInput: "for the bus for 20 mins.", correctAnswers: ["have been waiting"], placeholder: "...", explanation: "Duration (for)." },
+      { id: "ppp_3", question: "(play)", beforeInput: "He is tired. He", afterInput: "football.", correctAnswers: ["has been playing"], placeholder: "...", explanation: "Result in present." },
+      { id: "ppp_4", question: "(watch)", beforeInput: "She", afterInput: "TV all day.", correctAnswers: ["has been watching"], placeholder: "...", explanation: "Duration (all day)." },
+      { id: "ppp_5", question: "(work)", beforeInput: "How long", afterInput: "here? (you)", correctAnswers: ["have you been working"], placeholder: "...", explanation: "Question form." }
+    ]
+  },
+  {
+    id: "adv-8",
+    title: "41. Past Perfect Simple",
+    description: "Had + Past Participle",
+    level: "Advanced",
+    color: "from-emerald-600 to-teal-600",
+    rules: "An action that happened **before** another action in the past.\n**Structure**: had + V3\n*When I arrived, the train **had left**.*",
+    exercises: [
+      { id: "ppast_1", question: "(leave)", beforeInput: "When I arrived, the train", afterInput: ".", correctAnswers: ["had left"], placeholder: "...", explanation: "Happened before arrival." },
+      { id: "ppast_2", question: "(eat)", beforeInput: "After they", afterInput: "dinner, they went out.", correctAnswers: ["had eaten", "had had"], placeholder: "...", explanation: "First action." },
+      { id: "ppast_3", question: "(finish)", beforeInput: "She went home because she", afterInput: "her work.", correctAnswers: ["had finished"], placeholder: "...", explanation: "Reason in the past." },
+      { id: "ppast_4", question: "(not/see)", beforeInput: "I didn't know him because I", afterInput: "him before.", correctAnswers: ["had not seen", "hadn't seen"], placeholder: "...", explanation: "Negative." },
+      { id: "ppast_5", question: "(forget)", beforeInput: "He told me that he", afterInput: "the keys.", correctAnswers: ["had forgotten"], placeholder: "...", explanation: "Reported past action." }
+    ]
+  },
+  {
+    id: "adv-9",
+    title: "42. Mixed Tenses",
+    description: "Choosing the correct tense in context",
+    level: "Advanced",
+    color: "from-teal-600 to-cyan-600",
+    rules: "Combine your knowledge of Present, Past, Future, and Perfect tenses to select the correct form based on the time markers (yesterday, now, since, for, tomorrow, etc.).",
+    exercises: [
+      { id: "mix_1", question: "(snow)", beforeInput: "Look! It", afterInput: "now.", correctAnswers: ["is snowing"], placeholder: "...", explanation: "Now -> Present Continuous." },
+      { id: "mix_2", question: "(go)", beforeInput: "I", afterInput: "to the cinema yesterday.", correctAnswers: ["went"], placeholder: "...", explanation: "Yesterday -> Past Simple." },
+      { id: "mix_3", question: "(live)", beforeInput: "She", afterInput: "in London for 5 years.", correctAnswers: ["has lived", "has been living"], placeholder: "...", explanation: "For -> Present Perfect." },
+      { id: "mix_4", question: "(wait)", beforeInput: "When I arrived, he", afterInput: "for me.", correctAnswers: ["was waiting"], placeholder: "...", explanation: "Interrupted action -> Past Continuous." },
+      { id: "mix_5", question: "(visit)", beforeInput: "I", afterInput: "my grandma next week.", correctAnswers: ["am going to visit", "will visit"], placeholder: "...", explanation: "Next week -> Future." }
+    ]
+  },
+  {
+    id: "adv-10",
+    title: "43. Word Order",
+    description: "Subject, Verb, Object, Place, Time",
+    level: "Advanced",
+    color: "from-cyan-600 to-sky-600",
+    rules: "Standard English Order: **Subject + Verb + Object**.\nAdverbs: **Manner** -> **Place** -> **Time**.\n*He played football (O) in the park (P) yesterday (T).*\nFrequency adverbs go before the main verb.",
+    exercises: [
+      { id: "wo_1", question: "always / car / he / his / washes", beforeInput: "", afterInput: ".", correctAnswers: ["He always washes his car"], placeholder: "Reorder...", explanation: "Subject + Freq + Verb + Object." },
+      { id: "wo_2", question: "yesterday / bought / I / book / a", beforeInput: "", afterInput: ".", correctAnswers: ["I bought a book yesterday"], placeholder: "Reorder...", explanation: "Subject + Verb + Object + Time." },
+      { id: "wo_3", question: "London / to / we / went / last year", beforeInput: "", afterInput: ".", correctAnswers: ["We went to London last year"], placeholder: "Reorder...", explanation: "Subject + Verb + Place + Time." },
+      { id: "wo_4", question: "slowly / walked / the / old / man", beforeInput: "", afterInput: ".", correctAnswers: ["The old man walked slowly"], placeholder: "Reorder...", explanation: "Subject + Verb + Manner." },
+      { id: "wo_5", question: "football / play / don't / often / they", beforeInput: "", afterInput: ".", correctAnswers: ["They don't often play football", "They do not often play football"], placeholder: "Reorder...", explanation: "Negative Sentence." }
+    ]
+  },
+  {
+    id: "adv-11",
+    title: "44. Gerund or Infinitive",
+    description: "Verbs followed by -ing or to...",
+    level: "Advanced",
+    color: "from-sky-600 to-blue-600",
+    rules: "**Gerund (-ing)**: enjoy, mind, avoid, finish, suggest.\n**Infinitive (to ...)**: want, decide, hope, promise, offer.\n**Both**: like, love, hate, start (often with little difference).",
+    exercises: [
+      { id: "gi_1", question: "(go)", beforeInput: "I enjoy", afterInput: "to the cinema.", correctAnswers: ["going"], placeholder: "...", explanation: "Enjoy + Gerund." },
+      { id: "gi_2", question: "(help)", beforeInput: "She offered", afterInput: "me.", correctAnswers: ["to help"], placeholder: "...", explanation: "Offer + Infinitive." },
+      { id: "gi_3", question: "(smoke)", beforeInput: "He stopped", afterInput: ".", correctAnswers: ["smoking"], placeholder: "...", explanation: "Stop + Gerund (cease action)." },
+      { id: "gi_4", question: "(buy)", beforeInput: "I decided", afterInput: "a new car.", correctAnswers: ["to buy"], placeholder: "...", explanation: "Decide + Infinitive." },
+      { id: "gi_5", question: "(open)", beforeInput: "Would you mind", afterInput: "the window?", correctAnswers: ["opening"], placeholder: "...", explanation: "Mind + Gerund." }
+    ]
+  },
+  {
+    id: "adv-12",
+    title: "45. Irregular Verbs List",
+    description: "Forms: Base, Past, Participle",
+    level: "Advanced",
+    color: "from-blue-600 to-indigo-600",
+    rules: "Review of common irregular verbs.\nExamples:\n- go / went / gone\n- see / saw / seen\n- buy / bought / bought",
+    exercises: [
+      { id: "irr_adv_1", question: "fly (Past Participle)", beforeInput: "He has", afterInput: "to New York.", correctAnswers: ["flown"], placeholder: "...", explanation: "fly - flew - flown." },
+      { id: "irr_adv_2", question: "forget (Past)", beforeInput: "I", afterInput: "my keys yesterday.", correctAnswers: ["forgot"], placeholder: "...", explanation: "forget - forgot - forgotten." },
+      { id: "irr_adv_3", question: "wear (Past Participle)", beforeInput: "She has never", afterInput: "this dress.", correctAnswers: ["worn"], placeholder: "...", explanation: "wear - wore - worn." },
+      { id: "irr_adv_4", question: "hide (Past)", beforeInput: "The cat", afterInput: "under the bed.", correctAnswers: ["hid"], placeholder: "...", explanation: "hide - hid - hidden." },
+      { id: "irr_adv_5", question: "sing (Past)", beforeInput: "They", afterInput: "a song.", correctAnswers: ["sang"], placeholder: "...", explanation: "sing - sang - sung." }
     ]
   }
 ];

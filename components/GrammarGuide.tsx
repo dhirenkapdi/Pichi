@@ -729,6 +729,7 @@ const StructuredCourse: React.FC = () => {
   if (view === 'list' || !activeChapter) {
     const basicChapters = grammarCourseData.filter(c => c.level === 'Basic');
     const intermediateChapters = grammarCourseData.filter(c => c.level === 'Intermediate');
+    const advancedChapters = grammarCourseData.filter(c => c.level === 'Advanced');
 
     return (
       <div className="animate-fade-in-up space-y-12">
@@ -776,6 +777,54 @@ const StructuredCourse: React.FC = () => {
                                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b ${chapter.color}`}></div>
                                 <div className="flex-1 p-5 pl-7">
                                     <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">{chapter.title}</h3>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">{chapter.description}</p>
+                                </div>
+                                <div className={`w-12 h-12 mr-5 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-white transition-all group-hover:scale-110 shadow-sm group-hover:shadow-md`} style={{}}>
+                                    <div className={`absolute inset-0 rounded-full bg-gradient-to-br ${chapter.color} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
+                                    <ChevronRight size={20} className="relative z-10" />
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="opacity-60 grayscale filter pointer-events-none">
+                        <div className="grid md:grid-cols-2 gap-4">
+                             <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 border-dashed flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800"></div>
+                                <div className="space-y-2 flex-1">
+                                    <div className="h-4 w-1/3 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                                    <div className="h-3 w-2/3 bg-slate-100 dark:bg-slate-800/50 rounded"></div>
+                                </div>
+                             </div>
+                             <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 border-dashed flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800"></div>
+                                <div className="space-y-2 flex-1">
+                                    <div className="h-4 w-1/3 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                                    <div className="h-3 w-2/3 bg-slate-100 dark:bg-slate-800/50 rounded"></div>
+                                </div>
+                             </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Advanced Section */}
+            <div>
+                 <div className="flex items-center gap-3 mb-6 px-2">
+                    <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-rose-200 dark:border-rose-500/30">Level 3</span>
+                    <h3 className="text-2xl font-black text-slate-800 dark:text-white">Advanced Grammar</h3>
+                </div>
+                {advancedChapters.length > 0 ? (
+                    <div className="grid md:grid-cols-2 gap-4">
+                        {advancedChapters.map((chapter) => (
+                            <button 
+                                key={chapter.id}
+                                onClick={() => handleChapterClick(chapter)}
+                                className="group relative flex items-center justify-between bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 hover:-translate-y-1 hover:shadow-xl transition-all text-left overflow-hidden"
+                            >
+                                <div className={`absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b ${chapter.color}`}></div>
+                                <div className="flex-1 p-5 pl-7">
+                                    <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">{chapter.title}</h3>
                                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">{chapter.description}</p>
                                 </div>
                                 <div className={`w-12 h-12 mr-5 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-white transition-all group-hover:scale-110 shadow-sm group-hover:shadow-md`} style={{}}>

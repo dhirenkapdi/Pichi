@@ -67,7 +67,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
 
             {/* Visual */}
             <div className="relative flex justify-center">
-               <div className="relative w-full max-w-sm bg-slate-900/90 border border-slate-800 p-6 rounded-[32px] shadow-2xl backdrop-blur-sm">
+               <div className="relative w-full max-w-sm bg-slate-900/90 border border-slate-800 p-6 rounded-[32px] shadow-2xl backdrop-blur-sm animate-float">
                   <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-[34px] opacity-20 blur-lg -z-10"></div>
                   
                   {/* Chat Bubbles */}

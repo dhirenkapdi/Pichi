@@ -447,7 +447,7 @@ export const generatePhraseOfTheDay = async (): Promise<any> => {
 };
 
 export const generateGameData = async (
-    gameType: 'scramble' | 'rapidFire', 
+    gameType: 'scramble' | 'rapidFire' | 'wordSelect', 
     count: number = 5,
     difficulty: 'easy' | 'medium' | 'hard' = 'medium'
 ): Promise<any[]> => {
@@ -469,6 +469,18 @@ export const generateGameData = async (
                   Generate ${count} translation multiple choice questions.
                   Level: ${difficulty} (${diffDesc}).
                   Output JSON Array: [{ "question": "Hi", "options": ["નમસ્તે", "આવજો"], "correctIndex": 0 }]
+                `;
+            } else if (gameType === 'wordSelect') {
+                const diffDesc = difficulty === 'easy' ? 'basic grammar/vocab' : difficulty === 'medium' ? 'intermediate grammar/prepositions' : 'advanced vocabulary';
+                prompt = `
+                  Generate ${count} fill-in-the-blank sentences for English learners (Gujarati native).
+                  Level: ${difficulty} (${diffDesc}).
+                  Output JSON Array: 
+                  [{ 
+                     "sentence": "The sky is ____ today.", 
+                     "options": ["blue", "green", "red", "yellow"], 
+                     "correct": "blue" 
+                  }]
                 `;
             }
 

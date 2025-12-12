@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { generateGameData, generateCrosswordData } from '../services/geminiService';
-import { Gamepad2, Timer, Trophy, Zap, RefreshCw, Loader2, Star, MoveLeft, Check, X, AlertCircle, Grid3X3, Play, Keyboard } from 'lucide-react';
+import { Gamepad2, Timer, Trophy, Zap, RefreshCw, Loader2, Star, MoveLeft, Check, X, AlertCircle, Grid3X3, Play, Keyboard, MousePointerClick } from 'lucide-react';
 import { addXp } from '../utils/progressUtils';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 
 const GameArena: React.FC = () => {
-  const [activeGame, setActiveGame] = useState<'menu' | 'scramble' | 'rapidFire' | 'crossword'>('menu');
+  const [activeGame, setActiveGame] = useState<'menu' | 'scramble' | 'rapidFire' | 'crossword' | 'wordSelect'>('menu');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [loading, setLoading] = useState(false);
   const [gameData, setGameData] = useState<any[]>([]);
@@ -26,6 +26,7 @@ const GameArena: React.FC = () => {
   const [initialTime, setInitialTime] = useState(10);
   const [timerActive, setTimerActive] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [selectedWordOption, setSelectedWordOption] = useState<string | null>(null);
 
   // Crossword State
   const [crosswordTopic, setCrosswordTopic] = useState('');
@@ -38,12 +39,13 @@ const GameArena: React.FC = () => {
 
   // --- GAME LOGIC ---
 
-  const startGame = async (type: 'scramble' | 'rapidFire' | 'crossword') => {
+  const startGame = async (type: 'scramble' | 'rapidFire' | 'crossword' | 'wordSelect') => {
     setActiveGame(type);
     setScore(0);
     setGameOver(false);
     setFeedback(null);
     setSelectedOption(null);
+    setSelectedWordOption(null);
 
     if (type === 'crossword') {
         setCrosswordStatus('input_topic');
@@ -193,6 +195,26 @@ const GameArena: React.FC = () => {
       setTimeout(nextRound, 1500); // 1.5s delay to see correct answer
   };
 
+  const handleWordSelectAnswer = (selectedWord: string) => {
+      if (feedback) return;
+      setSelectedWordOption(selectedWord);
+      
+      const correctWord = gameData[currentQuestionIndex].correct;
+      
+      if (selectedWord === correctWord) {
+          const basePoints = 10;
+          const points = Math.round(basePoints * getDifficultyMultiplier());
+          setScore(prev => prev + points);
+          setFeedback('success');
+      } else {
+          setFeedback('error');
+      }
+      setTimeout(() => {
+          setSelectedWordOption(null);
+          nextRound();
+      }, 1500);
+  }
+
   const handleRapidFireTimeout = () => {
       setTimerActive(false);
       setFeedback('error');
@@ -207,6 +229,10 @@ const GameArena: React.FC = () => {
           
           if (activeGame === 'scramble') initScrambleRound(gameData[nextIdx]);
           if (activeGame === 'rapidFire') initRapidFireRound();
+          if (activeGame === 'wordSelect') {
+              setFeedback(null);
+              setSelectedWordOption(null);
+          }
       } else {
           endGame();
       }
@@ -356,7 +382,7 @@ const GameArena: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {/* Word Scramble Card */}
                 <button 
                   onClick={() => startGame('scramble')}
@@ -368,18 +394,8 @@ const GameArena: React.FC = () => {
                         <div className="w-14 h-14 bg-purple-500 text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-purple-200 dark:shadow-none">
                             <RefreshCw size={28} />
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Word Scramble</h3>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium mb-4 text-sm">Unjumble letters to find the word.</p>
-                        
-                        <div className="flex gap-2 text-xs font-bold text-slate-500 dark:text-slate-500">
-                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
-                                {difficulty === 'easy' ? '3-4 Letters' : difficulty === 'medium' ? '5-6 Letters' : '7+ Letters'}
-                             </span>
-                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
-                                {getDifficultyMultiplier()}x XP
-                             </span>
-                        </div>
-
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Word Scramble</h3>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium mb-4 text-xs">Unjumble letters to find the word.</p>
                         <div className="mt-6 inline-flex items-center text-sm font-bold text-purple-600 dark:text-purple-400">
                              Play Now <MoveLeft className="ml-2 rotate-180" size={16}/>
                         </div>
@@ -397,19 +413,28 @@ const GameArena: React.FC = () => {
                         <div className="w-14 h-14 bg-orange-500 text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-orange-200 dark:shadow-none">
                             <Timer size={28} />
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Rapid Fire</h3>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium mb-4 text-sm">Race against the clock!</p>
-                        
-                        <div className="flex gap-2 text-xs font-bold text-slate-500 dark:text-slate-500">
-                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
-                                {difficulty === 'easy' ? '15s Timer' : difficulty === 'medium' ? '10s Timer' : '5s Timer'}
-                             </span>
-                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
-                                {getDifficultyMultiplier()}x XP
-                             </span>
-                        </div>
-
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Rapid Fire</h3>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium mb-4 text-xs">Race against the clock!</p>
                         <div className="mt-6 inline-flex items-center text-sm font-bold text-orange-600 dark:text-orange-400">
+                             Play Now <MoveLeft className="ml-2 rotate-180" size={16}/>
+                        </div>
+                    </div>
+                </button>
+
+                 {/* Word Select Card (New) */}
+                 <button 
+                  onClick={() => startGame('wordSelect')}
+                  disabled={loading}
+                  className="group relative bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-xl hover:-translate-y-1 transition-all overflow-hidden text-left h-full"
+                >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-teal-100 dark:bg-teal-900/20 rounded-bl-full -mr-8 -mt-8 group-hover:scale-110 transition"></div>
+                    <div className="relative z-10">
+                        <div className="w-14 h-14 bg-teal-500 text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-teal-200 dark:shadow-none">
+                            <MousePointerClick size={28} />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Word Select</h3>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium mb-4 text-xs">Choose the right word for the context.</p>
+                        <div className="mt-6 inline-flex items-center text-sm font-bold text-teal-600 dark:text-teal-400">
                              Play Now <MoveLeft className="ml-2 rotate-180" size={16}/>
                         </div>
                     </div>
@@ -426,18 +451,8 @@ const GameArena: React.FC = () => {
                         <div className="w-14 h-14 bg-blue-500 text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-200 dark:shadow-none">
                             <Grid3X3 size={28} />
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Crossword</h3>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium mb-4 text-sm">Solve puzzles on any topic.</p>
-                        
-                        <div className="flex gap-2 text-xs font-bold text-slate-500 dark:text-slate-500">
-                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
-                                Any Topic
-                             </span>
-                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
-                                50 XP
-                             </span>
-                        </div>
-
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Crossword</h3>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium mb-4 text-xs">Solve puzzles on any topic.</p>
                         <div className="mt-6 inline-flex items-center text-sm font-bold text-blue-600 dark:text-blue-400">
                              Play Now <MoveLeft className="ml-2 rotate-180" size={16}/>
                         </div>
@@ -540,7 +555,7 @@ const GameArena: React.FC = () => {
                                                    <>
                                                        {cell.number && <span className="absolute top-0.5 left-0.5 text-[9px] font-bold text-slate-800 leading-none select-none">{cell.number}</span>}
                                                        <input 
-                                                         ref={el => gridInputRefs.current[`${r}-${c}`] = el}
+                                                         ref={(el) => { if (el) gridInputRefs.current[`${r}-${c}`] = el }}
                                                          type="text" 
                                                          maxLength={1}
                                                          value={crosswordUserInputs[`${r}-${c}`] || ''}
@@ -619,7 +634,7 @@ const GameArena: React.FC = () => {
       );
   }
 
-  // --- ACTIVE GAME VIEW (Scramble / RapidFire) ---
+  // --- ACTIVE GAME VIEW (Scramble / RapidFire / WordSelect) ---
   return (
       <div className="max-w-2xl mx-auto h-[600px] flex flex-col">
           {/* Game Header */}
@@ -725,6 +740,58 @@ const GameArena: React.FC = () => {
                               )
                           })}
                       </div>
+                  </div>
+              )}
+
+              {/* WORD SELECT UI */}
+              {activeGame === 'wordSelect' && gameData[currentQuestionIndex] && (
+                  <div className="text-center w-full animate-fade-in-up flex flex-col items-center">
+                       {/* Sentence Bubble */}
+                       <div className="bg-teal-50 dark:bg-teal-900/20 p-8 rounded-[32px] border border-teal-200 dark:border-teal-800 mb-10 w-full max-w-xl shadow-sm">
+                           <h3 className="text-2xl font-bold text-slate-800 dark:text-white leading-relaxed">
+                               {gameData[currentQuestionIndex].sentence.split('____').map((part: string, i: number, arr: string[]) => (
+                                   <React.Fragment key={i}>
+                                       {part}
+                                       {i < arr.length - 1 && (
+                                           <span className={`inline-block px-4 py-1 mx-1 rounded-lg border-b-4 min-w-[80px] text-center font-bold transition-colors ${
+                                               feedback === 'success' ? 'bg-green-200 text-green-800 border-green-400' :
+                                               feedback === 'error' ? 'bg-red-200 text-red-800 border-red-400' :
+                                               'bg-white dark:bg-slate-800 text-slate-400 border-slate-300 dark:border-slate-600'
+                                           }`}>
+                                               {feedback && selectedWordOption ? selectedWordOption : "?"}
+                                           </span>
+                                       )}
+                                   </React.Fragment>
+                               ))}
+                           </h3>
+                       </div>
+
+                       {/* Options Grid */}
+                       <div className="grid grid-cols-2 gap-4 w-full max-w-lg">
+                           {gameData[currentQuestionIndex].options.map((opt: string, i: number) => {
+                               const isSelected = selectedWordOption === opt;
+                               const isCorrect = opt === gameData[currentQuestionIndex].correct;
+                               
+                               let btnClass = "bg-white dark:bg-slate-900 border-b-4 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-white hover:-translate-y-1 hover:border-teal-300";
+                               
+                               if (feedback) {
+                                   if (isCorrect) btnClass = "bg-green-500 border-green-700 text-white";
+                                   else if (isSelected) btnClass = "bg-red-500 border-red-700 text-white opacity-50";
+                                   else btnClass = "bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400 opacity-50";
+                               }
+
+                               return (
+                                   <button 
+                                     key={i}
+                                     onClick={() => handleWordSelectAnswer(opt)}
+                                     disabled={feedback !== null}
+                                     className={`p-6 rounded-2xl text-xl font-bold transition-all active:border-b-0 active:translate-y-1 ${btnClass}`}
+                                   >
+                                       {opt}
+                                   </button>
+                               )
+                           })}
+                       </div>
                   </div>
               )}
           </div>

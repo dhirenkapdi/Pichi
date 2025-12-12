@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { createBlob, decode, decodeAudioData } from '../utils/audioUtils';
 import { incrementWordsSpoken } from '../utils/progressUtils';
-import { Mic, MicOff, Volume2, X, MessageSquare, Play, Loader2, WifiOff, AlertCircle, StopCircle, User } from 'lucide-react';
+import { Mic, MicOff, Volume2, X, MessageSquare, Play, Loader2, WifiOff, AlertCircle, StopCircle, User, Briefcase, Utensils, MapPin, GraduationCap, Sparkles, Coffee } from 'lucide-react';
 
 interface LiveTutorProps {
   onClose: () => void;
@@ -14,6 +14,13 @@ interface ChatMessage {
   text: string;
 }
 
+const TOPICS = [
+  { id: 'free', label: 'Free Chat', icon: <MessageSquare size={18}/>, prompt: "Just chat casually about anything the user wants. Be friendly, curious, and keep the conversation going." },
+  { id: 'interview', label: 'Job Interview', icon: <Briefcase size={18}/>, prompt: "Roleplay a job interview. You are the interviewer for a generic corporate role. Ask standard interview questions one by one. Keep it professional but encouraging." },
+  { id: 'restaurant', label: 'Ordering Food', icon: <Utensils size={18}/>, prompt: "Roleplay a restaurant waiter. The user is a customer. Ask for their order, suggest special items, and handle the bill interactions." },
+  { id: 'travel', label: 'Travel Help', icon: <MapPin size={18}/>, prompt: "Roleplay a local stranger on the street. The user is a tourist asking for directions or recommendations. Be helpful and give clear directions." },
+];
+
 const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
   const [hasStarted, setHasStarted] = useState(false);
   const [isActive, setIsActive] = useState(false);
@@ -21,6 +28,10 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
   const [status, setStatus] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  
+  // Settings State
+  const [selectedTopic, setSelectedTopic] = useState(TOPICS[0]);
+  const [strictMode, setStrictMode] = useState(false);
   
   // Refs for audio handling
   const inputAudioContextRef = useRef<AudioContext | null>(null);
@@ -123,6 +134,36 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
       outputAudioContextRef.current = outputAudioContext;
 
       setStatus('Connecting to Pichi...');
+
+      // --- IMPROVED SYSTEM INSTRUCTION ---
+      const baseInstruction = `You are Pichi, a patient and encouraging English tutor for a Gujarati speaker. Your goal is to get the user speaking as much as possible.`;
+
+      const modeInstruction = strictMode
+        ? `MODE: STRICT CORRECTION (Teacher Style)
+           - Listen carefully for grammar, tense, and vocabulary errors.
+           - When an error is detected: STOP the flow politely.
+           - Explicitly point out the mistake.
+           - Provide the correct sentence clearly.
+           - Ask the user to repeat the corrected sentence before moving on.
+           - You may use simple Gujarati to explain grammatical concepts if the user is struggling.`
+        : `MODE: CASUAL CONVERSATION (Friend Style)
+           - Focus entirely on the *meaning* and *flow* of the conversation.
+           - IGNORE minor grammar mistakes to build confidence.
+           - Only correct the user if what they said is unintelligible or has a critical error.
+           - If you correct, do it subtly by repeating their idea back to them correctly (recasting).
+           - Be enthusiastic and fun.`;
+
+      const scenarioInstruction = `CURRENT SCENARIO: ${selectedTopic.prompt}`;
+
+      const generalRules = `
+        RULES:
+        1. CRITICAL: Keep your responses SHORT (max 1-2 sentences unless explaining a concept). Do not monologue.
+        2. Always end with a simple follow-up question to prompt the user to speak.
+        3. If the user speaks in Gujarati, understand them, but gently encourage them to say it in English, or translate it for them and ask them to repeat the English version.
+        4. Speak clearly and at a moderate pace.
+      `;
+
+      const systemInstruction = `${baseInstruction}\n\n${modeInstruction}\n\n${scenarioInstruction}\n\n${generalRules}`;
 
       const connectWithRetry = async (retries = 3, delay = 1000): Promise<any> => {
           try {
@@ -252,7 +293,7 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                   speechConfig: {
                     voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
                   },
-                  systemInstruction: `You are Pichi, a friendly English tutor. Speak clearly. Correct mistakes gently in Gujarati if needed. Keep it engaging.`,
+                  systemInstruction: systemInstruction,
                 },
               });
           } catch (err: any) {
@@ -292,8 +333,8 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
       <div className="w-full max-w-lg bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-[40px] shadow-2xl overflow-hidden relative flex flex-col h-[85dvh] border border-white/10 ring-1 ring-white/5">
         
         {/* Header */}
-        <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-20">
-            <div className="flex items-center gap-3">
+        <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-20 pointer-events-none">
+            <div className="flex items-center gap-3 pointer-events-auto">
                 <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center border border-orange-500/50 text-orange-400">
                     <Volume2 size={20} />
                 </div>
@@ -302,42 +343,72 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                     <p className="text-slate-400 text-xs font-medium mt-1">AI Language Tutor</p>
                 </div>
             </div>
-            <button onClick={onClose} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition">
+            <button onClick={onClose} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition pointer-events-auto">
                 <X size={20} />
             </button>
         </div>
 
         {!hasStarted ? (
             /* START SCREEN */
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-8 relative overflow-hidden">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6 relative overflow-hidden">
                 {/* Background Blobs */}
                 <div className="absolute top-1/4 -left-20 w-64 h-64 bg-indigo-600/20 rounded-full blur-3xl animate-blob"></div>
                 <div className="absolute bottom-1/4 -right-20 w-64 h-64 bg-orange-600/20 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
 
-                <div className="relative z-10">
-                    <div className="w-32 h-32 mx-auto bg-gradient-to-tr from-orange-500 to-pink-600 rounded-full shadow-[0_0_40px_rgba(249,115,22,0.4)] flex items-center justify-center animate-float mb-6">
-                        <Mic className="w-14 h-14 text-white drop-shadow-md" />
-                    </div>
+                <div className="relative z-10 w-full flex flex-col items-center">
+                    <h3 className="text-3xl font-black text-white tracking-tight mb-6 mt-8">Start Session</h3>
                     
-                    <h3 className="text-3xl font-black text-white tracking-tight mb-2">Speak with Pichi</h3>
-                    <p className="text-slate-400 text-lg max-w-xs mx-auto">Practice real conversations. Improve fluency instantly.</p>
-                </div>
-
-                {error && (
-                    <div className="bg-red-500/10 text-red-400 px-4 py-3 rounded-2xl border border-red-500/20 flex items-center gap-2 text-sm font-bold animate-shake">
-                        <AlertCircle size={16} /> {error}
+                    {/* Scenario Selection */}
+                    <div className="w-full mb-6">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block text-left pl-1">Choose Scenario</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            {TOPICS.map(t => (
+                                <button 
+                                    key={t.id}
+                                    onClick={() => setSelectedTopic(t)}
+                                    className={`p-3 rounded-2xl border flex flex-col items-center gap-2 transition-all ${
+                                        selectedTopic.id === t.id 
+                                        ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-900/30' 
+                                        : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white hover:border-slate-600'
+                                    }`}
+                                >
+                                    {t.icon}
+                                    <span className="text-xs font-bold">{t.label}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                )}
 
-                <div className="mt-auto w-full z-10">
+                    {/* Strict Mode Toggle */}
+                    <div className="w-full bg-slate-800/50 rounded-2xl p-1.5 flex mb-8 border border-slate-700/50">
+                        <button 
+                            onClick={() => setStrictMode(false)}
+                            className={`flex-1 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${!strictMode ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            <Sparkles size={14} /> Casual
+                        </button>
+                        <button 
+                            onClick={() => setStrictMode(true)}
+                            className={`flex-1 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${strictMode ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            <GraduationCap size={14} /> Strict
+                        </button>
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-500/10 text-red-400 px-4 py-3 rounded-2xl border border-red-500/20 flex items-center gap-2 text-sm font-bold animate-shake mb-4 w-full">
+                            <AlertCircle size={16} /> {error}
+                        </div>
+                    )}
+
                     <button 
                         onClick={startSession}
                         className="w-full bg-white text-slate-900 py-4 rounded-2xl font-black text-lg shadow-xl hover:scale-[1.02] transition-transform flex items-center justify-center gap-3"
                     >
                         <Play fill="currentColor" size={20} />
-                        Start Conversation
+                        Start Speaking
                     </button>
-                    <p className="text-xs text-slate-600 mt-4">Headphones recommended</p>
+                    <p className="text-xs text-slate-600 mt-4 font-medium">Headphones recommended for best experience</p>
                 </div>
             </div>
         ) : (
@@ -349,7 +420,10 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                     {messages.length === 0 && (
                         <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50 gap-4">
                              {status.includes('Connecting') && <Loader2 className="animate-spin text-orange-500" size={32} />}
-                             <p className="font-medium tracking-wide text-sm uppercase">{status}</p>
+                             <div className="text-center">
+                                 <p className="font-bold text-sm uppercase tracking-widest mb-1">{status}</p>
+                                 {isActive && !isAiSpeaking && <p className="text-xs">Topic: {selectedTopic.label} ({strictMode ? 'Strict' : 'Casual'})</p>}
+                             </div>
                         </div>
                     )}
                     {messages.map((msg) => (

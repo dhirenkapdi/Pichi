@@ -341,15 +341,8 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose, theme, toggleTheme }) =>
       inputAudioContextRef.current = inputAudioContext;
       outputAudioContextRef.current = outputAudioContext;
 
-      const baseInstruction = `
-        You are Pichi, a friendly AI English tutor for a Gujarati speaker. 
-        Engage in a natural, spoken conversation.
-        If the user speaks Gujarati, understand it but reply primarily in English.
-      `;
-
-      const modeInstruction = tutorMode === 'casual' 
-        ? ` MODE: CASUAL. Keep conversation fun. Be encouraging.`
-        : ` MODE: STRICT TEACHER. Correct mistakes immediately.`;
+      const baseInstruction = `You are Pichi, a friendly AI English tutor for a Gujarati speaker. Engage in a natural, spoken conversation. If the user speaks Gujarati, understand it but reply primarily in English.`;
+      const modeInstruction = tutorMode === 'casual' ? ` MODE: CASUAL. Keep conversation fun. Be encouraging.` : ` MODE: STRICT TEACHER. Correct mistakes immediately.`;
 
       const connectWithRetry = async (retries = 3, delay = 1000): Promise<any> => {
           try {
@@ -447,10 +440,8 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose, theme, toggleTheme }) =>
                   },
                   onerror: (e: any) => { 
                       console.error("Session Error:", e); 
-                      // If it's a network error, allow retry logic to potentially handle it if we re-trigger, 
-                      // but here we just show state.
+                      // Only set error if not retrying immediately
                       setStatus('Connection Error'); 
-                      setError("Connection lost. Please try again.");
                   }
                 },
                 config: {
@@ -458,7 +449,8 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose, theme, toggleTheme }) =>
                   inputAudioTranscription: {},
                   outputAudioTranscription: {},
                   speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-                  systemInstruction: baseInstruction + modeInstruction, // Passed as simple string to avoid validation errors
+                  // Use robust object format for instruction
+                  systemInstruction: { parts: [{ text: baseInstruction + modeInstruction }] },
                 },
               });
               activeSessionRef.current = session;

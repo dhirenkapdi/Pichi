@@ -212,7 +212,11 @@ const App: React.FC = () => {
 
       {/* Live Tutor Overlay */}
       {showLiveTutor && (
-        <LiveTutor onClose={() => setShowLiveTutor(false)} />
+        <LiveTutor 
+          onClose={() => setShowLiveTutor(false)} 
+          theme={theme}
+          toggleTheme={toggleTheme}
+        />
       )}
     </div>
   );

@@ -447,7 +447,7 @@ export const generatePhraseOfTheDay = async (): Promise<any> => {
 };
 
 export const generateGameData = async (
-    gameType: 'scramble' | 'rapidFire' | 'wordSelect', 
+    gameType: 'scramble' | 'rapidFire' | 'wordSelect' | 'wordSearch', 
     count: number = 5,
     difficulty: 'easy' | 'medium' | 'hard' = 'medium'
 ): Promise<any[]> => {
@@ -480,6 +480,22 @@ export const generateGameData = async (
                      "sentence": "The sky is ____ today.", 
                      "options": ["blue", "green", "red", "yellow"], 
                      "correct": "blue" 
+                  }]
+                `;
+            } else if (gameType === 'wordSearch') {
+                 const themes = ['Animals', 'Food', 'Travel', 'School', 'Space', 'Technology', 'Nature', 'Sports'];
+                 const randomTheme = themes[Math.floor(Math.random() * themes.length)];
+                 const diffDesc = difficulty === 'easy' ? 'simple 3-5 letter words' : difficulty === 'medium' ? 'common 5-8 letter words' : 'complex 7+ letter words';
+                 
+                 prompt = `
+                  Generate a Word Search puzzle data.
+                  Topic: ${randomTheme}.
+                  Level: ${difficulty} (${diffDesc}).
+                  Generate 8 words related to the topic.
+                  Output JSON Array with 1 item: 
+                  [{ 
+                     "topic": "${randomTheme}", 
+                     "words": ["APPLE", "BANANA", "GRAPE", "MANGO", "LEMON", "CHERRY", "PEACH", "PLUM"] 
                   }]
                 `;
             }

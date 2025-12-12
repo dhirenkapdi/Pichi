@@ -2,45 +2,47 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { createBlob, decode, decodeAudioData } from '../utils/audioUtils';
 import { incrementWordsSpoken } from '../utils/progressUtils';
-import { Mic, MicOff, Volume2, X, MessageSquare, Play, Loader2, WifiOff, AlertCircle, StopCircle, User, Briefcase, Utensils, MapPin, GraduationCap, Sparkles, Coffee } from 'lucide-react';
+import { Mic, X, Sparkles, Play, Sun, Moon, GraduationCap } from 'lucide-react';
 
 interface LiveTutorProps {
   onClose: () => void;
+  theme: 'dark' | 'light';
+  toggleTheme: () => void;
 }
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'model';
   text: string;
+  timestamp: string;
 }
 
-const TOPICS = [
-  { id: 'free', label: 'Free Chat', icon: <MessageSquare size={18}/>, prompt: "Just chat casually about anything the user wants. Be friendly, curious, and keep the conversation going." },
-  { id: 'interview', label: 'Job Interview', icon: <Briefcase size={18}/>, prompt: "Roleplay a job interview. You are the interviewer for a generic corporate role. Ask standard interview questions one by one. Keep it professional but encouraging." },
-  { id: 'restaurant', label: 'Ordering Food', icon: <Utensils size={18}/>, prompt: "Roleplay a restaurant waiter. The user is a customer. Ask for their order, suggest special items, and handle the bill interactions." },
-  { id: 'travel', label: 'Travel Help', icon: <MapPin size={18}/>, prompt: "Roleplay a local stranger on the street. The user is a tourist asking for directions or recommendations. Be helpful and give clear directions." },
-];
+type TutorMode = 'casual' | 'strict';
 
-const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
+const LiveTutor: React.FC<LiveTutorProps> = ({ onClose, theme, toggleTheme }) => {
   const [hasStarted, setHasStarted] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  
-  // Settings State
-  const [selectedTopic, setSelectedTopic] = useState(TOPICS[0]);
-  const [strictMode, setStrictMode] = useState(false);
+  const [tutorMode, setTutorMode] = useState<TutorMode>('casual');
   
   // Refs for audio handling
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const outputAudioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sessionPromiseRef = useRef<Promise<any> | null>(null);
+  const activeSessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextStartTimeRef = useRef<number>(0);
   const mountedRef = useRef(true);
+  
+  // Refs for Analysis (Visualizer)
+  const inputAnalyserRef = useRef<AnalyserNode | null>(null);
+  const outputAnalyserRef = useRef<AnalyserNode | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
   
   // Refs for transcription
   const currentUserTextRef = useRef('');
@@ -48,8 +50,16 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const cleanup = useCallback(() => {
-    mountedRef.current = false;
-    
+    // Close active session
+    if (activeSessionRef.current) {
+        try {
+            activeSessionRef.current.close();
+        } catch (e) {
+            console.error("Error closing session:", e);
+        }
+        activeSessionRef.current = null;
+    }
+
     // Stop all audio sources
     sourcesRef.current.forEach(source => {
       try { source.stop(); } catch(e) {}
@@ -59,34 +69,27 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
     // Close contexts
     try { inputAudioContextRef.current?.close(); } catch(e) {}
     try { outputAudioContextRef.current?.close(); } catch(e) {}
+    inputAudioContextRef.current = null;
+    outputAudioContextRef.current = null;
     
     // Stop mic stream
-    streamRef.current?.getTracks().forEach(track => track.stop());
+    if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+    }
     
     setIsActive(false);
     setIsAiSpeaking(false);
-    setHasStarted(false);
   }, []);
 
   useEffect(() => {
-    // Load chat history if available
-    const saved = localStorage.getItem('talksmart_chat_history');
-    if (saved) {
-        try {
-            setMessages(JSON.parse(saved));
-        } catch (e) {
-            console.error("Failed to load chat history", e);
-        }
-    }
-
-    return () => cleanup();
-  }, []);
-
-  useEffect(() => {
-    if (messages.length > 0) {
-        localStorage.setItem('talksmart_chat_history', JSON.stringify(messages));
-    }
-  }, [messages]);
+    mountedRef.current = true;
+    return () => {
+        cleanup();
+        mountedRef.current = false;
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, [cleanup]);
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
@@ -102,26 +105,221 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
     }
   }, [messages]);
 
+  // --- VISUALIZER LOGIC ---
+  useEffect(() => {
+      if (!isActive || !canvasRef.current) return;
+
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Set canvas size for retina displays
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      let phase = 0;
+      let currentAmp = 0; 
+      let currentPitch = 0.5; // Normalized pitch/centroid
+      
+      const render = () => {
+          if (!mountedRef.current) return;
+          
+          const width = rect.width;
+          const height = rect.height;
+          const centerY = height / 2;
+          
+          ctx.clearRect(0, 0, width, height);
+
+          // Determine which analyser to use
+          let analyser = isAiSpeaking ? outputAnalyserRef.current : inputAnalyserRef.current;
+          
+          // Get Frequency Data
+          let rms = 0; 
+          let centroid = 0;
+
+          if (analyser) {
+              const dataArray = new Uint8Array(analyser.frequencyBinCount);
+              analyser.getByteFrequencyData(dataArray);
+              
+              let sumSquares = 0;
+              let weightedSum = 0;
+              let totalWeight = 0;
+              // Focus on human voice frequency range (roughly first 50-60% of bins @ 24k rate)
+              const relevantBins = Math.floor(dataArray.length * 0.6); 
+
+              for (let i = 0; i < relevantBins; i++) {
+                  const val = dataArray[i] / 255;
+                  sumSquares += val * val;
+                  
+                  weightedSum += i * dataArray[i];
+                  totalWeight += dataArray[i];
+              }
+              
+              if (relevantBins > 0) {
+                  rms = Math.sqrt(sumSquares / relevantBins);
+                  // Dynamic Boost: Low volumes get bumped slightly, high volumes compressed
+                  rms = Math.pow(rms, 1.2) * 3; 
+                  rms = Math.min(1.0, rms); 
+                  
+                  if (totalWeight > 0) {
+                      // Normalize centroid to 0-1 range roughly corresponding to bass -> treble
+                      centroid = (weightedSum / totalWeight) / (relevantBins * 0.5); 
+                  }
+              }
+          }
+
+          // Smooth Amplitude: Fast attack, moderate decay for natural feel
+          if (rms > currentAmp) {
+              currentAmp += (rms - currentAmp) * 0.3; 
+          } else {
+              currentAmp += (rms - currentAmp) * 0.1; 
+          }
+          
+          // Smooth Pitch
+          currentPitch += (centroid - currentPitch) * 0.1;
+          
+          // Breathing Idle: Very subtle movement when silent
+          const breathing = Math.sin(phase * 0.05) * 0.02;
+          const effectiveAmp = Math.max(currentAmp, 0.05 + breathing); 
+
+          // Visual Config
+          const isDark = theme === 'dark';
+          // Use 'screen' for additive neon blending in dark mode, standard for light
+          ctx.globalCompositeOperation = isDark ? 'screen' : 'source-over'; 
+          
+          // Colors based on state
+          const colors = isAiSpeaking 
+              ? [ // AI: Blue/Cyan/Purple
+                  isDark ? {r: 0, g: 200, b: 255} : {r: 0, g: 100, b: 200}, 
+                  isDark ? {r: 100, g: 100, b: 255} : {r: 60, g: 60, b: 200},
+                  isDark ? {r: 180, g: 50, b: 255} : {r: 120, g: 0, b: 180} 
+                ]
+              : [ // User: Emerald/Teal
+                  isDark ? {r: 0, g: 255, b: 150} : {r: 0, g: 180, b: 100},
+                  isDark ? {r: 50, g: 220, b: 200} : {r: 0, g: 150, b: 150},
+                  isDark ? {r: 100, g: 255, b: 100} : {r: 50, g: 180, b: 50}
+                ];
+
+          // Draw waves
+          colors.forEach((col, i) => {
+              ctx.beginPath();
+              
+              // Wave Parameters
+              // Pitch affects frequency slightly (higher pitch = more ripples)
+              const pitchMod = Math.min(0.01, currentPitch * 0.01);
+              const freq = 0.015 + (i * 0.005) + pitchMod;
+
+              // Speed varies by layer
+              const speed = 0.08 + (i * 0.02) + (effectiveAmp * 0.1);
+              const basePhase = phase * speed + (i * (Math.PI / 1.5)); 
+              
+              // Max height constraint - kept compact (20% of container height max)
+              const maxH = (height * 0.2) * effectiveAmp; 
+
+              let isFirst = true;
+              
+              // Draw
+              for (let x = 0; x <= width; x += 4) {
+                  const nx = x / width; // Normalized x (0 to 1)
+                  
+                  // Taper function: Sine window to pin edges smoothly
+                  // pow(sin, 2) creates a nice bell curve taper
+                  const taper = Math.pow(Math.sin(nx * Math.PI), 2); 
+                  
+                  // Primary Sine
+                  const y1 = Math.sin(x * freq + basePhase);
+                  // Secondary Sine (Harmonic) for liquidity
+                  const y2 = Math.sin(x * (freq * 2.2) - basePhase * 1.5);
+                  
+                  // Combine
+                  const combinedY = y1 + (y2 * 0.5);
+                  
+                  const y = centerY + (combinedY * maxH * taper);
+                  
+                  if (isFirst) {
+                      ctx.moveTo(x, y);
+                      isFirst = false;
+                  } else {
+                      ctx.lineTo(x, y);
+                  }
+              }
+              
+              // Styling
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+              
+              // Thickness grows slightly with volume
+              ctx.lineWidth = 1.5 + (effectiveAmp * 2); 
+              
+              // Gradient Stroke for "Glowing" Core
+              const gradient = ctx.createLinearGradient(0, 0, width, 0);
+              // Opacity logic: Fade out at edges
+              const alphaBase = isDark ? 0.8 : 0.6;
+              const alphaBoost = effectiveAmp * 0.2;
+              const alpha = alphaBase + alphaBoost;
+
+              gradient.addColorStop(0, `rgba(${col.r}, ${col.g}, ${col.b}, 0)`);
+              gradient.addColorStop(0.2, `rgba(${col.r}, ${col.g}, ${col.b}, ${alpha * 0.5})`);
+              gradient.addColorStop(0.5, `rgba(${col.r}, ${col.g}, ${col.b}, ${alpha})`);
+              gradient.addColorStop(0.8, `rgba(${col.r}, ${col.g}, ${col.b}, ${alpha * 0.5})`);
+              gradient.addColorStop(1, `rgba(${col.r}, ${col.g}, ${col.b}, 0)`);
+              
+              ctx.strokeStyle = gradient;
+
+              // Shadow Blur for Glow
+              // Only heavy blur in dark mode for neon effect. 
+              // Light mode gets minimal blur to stay sharp.
+              ctx.shadowColor = `rgba(${col.r}, ${col.g}, ${col.b}, ${isDark ? 0.8 : 0.4})`;
+              ctx.shadowBlur = isDark ? 10 + (effectiveAmp * 15) : 2 + (effectiveAmp * 5);
+              
+              ctx.stroke();
+          });
+
+          // Restore normal blending for next frame
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.shadowBlur = 0;
+
+          phase += 1;
+          animationFrameRef.current = requestAnimationFrame(render);
+      };
+
+      render();
+
+      return () => {
+          if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      };
+  }, [isActive, isAiSpeaking, theme]);
+
+
+  const getCurrentTime = () => {
+      return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   const startSession = async () => {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     setError(null);
     setHasStarted(true);
-    setStatus('Initializing Audio...');
+    setStatus('Connecting...');
     
     try {
-      // The API key must be obtained exclusively from the environment variable process.env.API_KEY
       const apiKey = process.env.API_KEY;
-
-      if (!apiKey) {
-        throw new Error("API Key is missing. Check configuration.");
-      }
-
-      if (!navigator.onLine) {
-          throw new Error("No internet connection. Please check your network.");
-      }
+      if (!apiKey) throw new Error("API Key is missing.");
+      if (!navigator.onLine) throw new Error("No internet connection.");
 
       const ai = new GoogleGenAI({ apiKey });
       
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+          } 
+      });
       streamRef.current = stream;
 
       const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -130,44 +328,32 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
       if (inputAudioContext.state === 'suspended') await inputAudioContext.resume();
       if (outputAudioContext.state === 'suspended') await outputAudioContext.resume();
 
+      const inputAnalyser = inputAudioContext.createAnalyser();
+      inputAnalyser.fftSize = 512; 
+      inputAnalyser.smoothingTimeConstant = 0.3; // More responsive
+      inputAnalyserRef.current = inputAnalyser;
+
+      const outputAnalyser = outputAudioContext.createAnalyser();
+      outputAnalyser.fftSize = 512;
+      outputAnalyser.smoothingTimeConstant = 0.3;
+      outputAnalyserRef.current = outputAnalyser;
+
       inputAudioContextRef.current = inputAudioContext;
       outputAudioContextRef.current = outputAudioContext;
 
-      setStatus('Connecting to Pichi...');
-
-      // --- IMPROVED SYSTEM INSTRUCTION ---
-      const baseInstruction = `You are Pichi, a patient and encouraging English tutor for a Gujarati speaker. Your goal is to get the user speaking as much as possible.`;
-
-      const modeInstruction = strictMode
-        ? `MODE: STRICT CORRECTION (Teacher Style)
-           - Listen carefully for grammar, tense, and vocabulary errors.
-           - When an error is detected: STOP the flow politely.
-           - Explicitly point out the mistake.
-           - Provide the correct sentence clearly.
-           - Ask the user to repeat the corrected sentence before moving on.
-           - You may use simple Gujarati to explain grammatical concepts if the user is struggling.`
-        : `MODE: CASUAL CONVERSATION (Friend Style)
-           - Focus entirely on the *meaning* and *flow* of the conversation.
-           - IGNORE minor grammar mistakes to build confidence.
-           - Only correct the user if what they said is unintelligible or has a critical error.
-           - If you correct, do it subtly by repeating their idea back to them correctly (recasting).
-           - Be enthusiastic and fun.`;
-
-      const scenarioInstruction = `CURRENT SCENARIO: ${selectedTopic.prompt}`;
-
-      const generalRules = `
-        RULES:
-        1. CRITICAL: Keep your responses SHORT (max 1-2 sentences unless explaining a concept). Do not monologue.
-        2. Always end with a simple follow-up question to prompt the user to speak.
-        3. If the user speaks in Gujarati, understand them, but gently encourage them to say it in English, or translate it for them and ask them to repeat the English version.
-        4. Speak clearly and at a moderate pace.
+      const baseInstruction = `
+        You are Pichi, a friendly AI English tutor for a Gujarati speaker. 
+        Engage in a natural, spoken conversation.
+        If the user speaks Gujarati, understand it but reply primarily in English.
       `;
 
-      const systemInstruction = `${baseInstruction}\n\n${modeInstruction}\n\n${scenarioInstruction}\n\n${generalRules}`;
+      const modeInstruction = tutorMode === 'casual' 
+        ? ` MODE: CASUAL. Keep conversation fun. Be encouraging.`
+        : ` MODE: STRICT TEACHER. Correct mistakes immediately.`;
 
       const connectWithRetry = async (retries = 3, delay = 1000): Promise<any> => {
           try {
-              return await ai.live.connect({
+              const session = await ai.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
                 callbacks: {
                   onopen: () => {
@@ -179,51 +365,44 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                     const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
                     
                     scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                      if (!mountedRef.current) return;
+                      if (!mountedRef.current || !activeSessionRef.current) return;
+                      
                       const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
                       const pcmBlob = createBlob(inputData);
-                      
-                      if (sessionPromiseRef.current) {
-                          sessionPromiseRef.current.then((session) => {
-                            session.sendRealtimeInput({ media: pcmBlob });
-                          }).catch(() => {});
+                      try {
+                          activeSessionRef.current.sendRealtimeInput({ media: pcmBlob });
+                      } catch (e) {
+                          console.error("Error sending input", e);
                       }
                     };
 
-                    source.connect(scriptProcessor);
+                    source.connect(inputAnalyser);
+                    inputAnalyser.connect(scriptProcessor);
                     scriptProcessor.connect(inputAudioContext.destination);
                   },
                   onmessage: async (message: LiveServerMessage) => {
                      if (!mountedRef.current) return;
 
-                     // Audio Output
                      const base64EncodedAudioString = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
                      if (base64EncodedAudioString) {
                         const ctx = outputAudioContextRef.current;
-                        if (ctx) {
+                        const analyser = outputAnalyserRef.current;
+
+                        if (ctx && analyser) {
                             const isNewTurn = !isAiSpeaking; 
-                            if (isNewTurn) await new Promise(r => setTimeout(r, 600)); 
+                            if (isNewTurn) await new Promise(r => setTimeout(r, 200)); 
 
                             nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
                             try {
-                                const audioBuffer = await decodeAudioData(
-                                    decode(base64EncodedAudioString),
-                                    ctx,
-                                    24000,
-                                    1
-                                );
-                                
+                                const audioBuffer = await decodeAudioData(decode(base64EncodedAudioString), ctx, 24000, 1);
                                 const source = ctx.createBufferSource();
                                 source.buffer = audioBuffer;
-                                source.connect(ctx.destination);
-                                
+                                source.connect(analyser);
+                                analyser.connect(ctx.destination);
                                 source.addEventListener('ended', () => {
                                     sourcesRef.current.delete(source);
-                                    if (sourcesRef.current.size === 0) {
-                                        setIsAiSpeaking(false);
-                                    }
+                                    if (sourcesRef.current.size === 0) setIsAiSpeaking(false);
                                 });
-
                                 source.start(nextStartTimeRef.current);
                                 nextStartTimeRef.current += audioBuffer.duration;
                                 sourcesRef.current.add(source);
@@ -234,26 +413,20 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                         }
                      }
 
-                     // Transcription
                      const serverContent = message.serverContent;
-                     if (serverContent?.outputTranscription?.text) {
-                         currentModelTextRef.current += serverContent.outputTranscription.text;
-                     }
-                     if (serverContent?.inputTranscription?.text) {
-                         currentUserTextRef.current += serverContent.inputTranscription.text;
-                     }
+                     if (serverContent?.outputTranscription?.text) currentModelTextRef.current += serverContent.outputTranscription.text;
+                     if (serverContent?.inputTranscription?.text) currentUserTextRef.current += serverContent.inputTranscription.text;
 
                      if (serverContent?.turnComplete) {
                          const userText = currentUserTextRef.current.trim();
                          const modelText = currentModelTextRef.current.trim();
-
                          if (userText) incrementWordsSpoken(userText.split(/\s+/).filter(w => w.length > 0).length);
-
                          if (userText || modelText) {
+                             const timestamp = getCurrentTime();
                              setMessages(prev => {
                                  const newMsgs = [...prev];
-                                 if (userText) newMsgs.push({ id: Date.now() + 'u', role: 'user', text: userText });
-                                 if (modelText) newMsgs.push({ id: Date.now() + 'm', role: 'model', text: modelText });
+                                 if (userText) newMsgs.push({ id: Date.now() + 'u', role: 'user', text: userText, timestamp });
+                                 if (modelText) newMsgs.push({ id: Date.now() + 'm', role: 'model', text: modelText, timestamp });
                                  return newMsgs;
                              });
                              currentUserTextRef.current = '';
@@ -269,36 +442,30 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
                      }
                   },
                   onclose: () => {
-                     if (mountedRef.current) {
-                         setStatus('Disconnected');
-                         setIsActive(false);
-                     }
+                      console.log("Session closed");
+                      setStatus('Disconnected');
                   },
-                  onerror: (e: any) => {
-                     console.error("Session Error:", e);
-                     if (mountedRef.current) {
-                         const msg = e.message || e.toString() || 'Unknown Error';
-                         if (msg.includes('503') || msg.includes('Network') || msg.includes('unavailable')) {
-                             setStatus('Connection unstable...');
-                         } else {
-                             setStatus('Connection Interrupted');
-                         }
-                     }
+                  onerror: (e: any) => { 
+                      console.error("Session Error:", e); 
+                      // If it's a network error, allow retry logic to potentially handle it if we re-trigger, 
+                      // but here we just show state.
+                      setStatus('Connection Error'); 
+                      setError("Connection lost. Please try again.");
                   }
                 },
                 config: {
                   responseModalities: [Modality.AUDIO],
                   inputAudioTranscription: {},
                   outputAudioTranscription: {},
-                  speechConfig: {
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
-                  },
-                  systemInstruction: systemInstruction,
+                  speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+                  systemInstruction: baseInstruction + modeInstruction, // Passed as simple string to avoid validation errors
                 },
               });
+              activeSessionRef.current = session;
+              return session;
           } catch (err: any) {
-              if (retries > 0 && (err.message?.includes('Network') || err.message?.includes('503') || err.name === 'TypeError')) {
-                  setStatus(`Retrying connection... (${retries})`);
+              console.error("Connect Attempt Error:", err);
+              if (retries > 0) {
                   await new Promise(r => setTimeout(r, delay));
                   return connectWithRetry(retries - 1, delay * 1.5);
               }
@@ -312,194 +479,107 @@ const LiveTutor: React.FC<LiveTutorProps> = ({ onClose }) => {
 
     } catch (err: any) {
       console.error("Start Session Error:", err);
-      let errMsg = 'Could not connect.';
-      if (err.name === 'NotAllowedError') errMsg = 'Microphone access denied.';
-      if (!navigator.onLine) errMsg = 'No internet connection.';
-      if (err.message && err.message.includes("API Key")) errMsg = "API Key Invalid or Missing.";
-      
+      let errMsg = "Connection failed. Please try again.";
+      if (err.message && err.message.includes('403')) errMsg = "API Key invalid or quota exceeded.";
+      if (err.message && err.message.includes('Network')) errMsg = "Network error. Check your connection.";
       setError(errMsg);
       setHasStarted(false);
       setIsActive(false);
-      setStatus('');
-      
-      try { inputAudioContextRef.current?.close(); } catch {}
-      try { outputAudioContextRef.current?.close(); } catch {}
-      try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
     }
   };
 
+  const bgClass = theme === 'dark' ? 'bg-[#0f172a]' : 'bg-white';
+  const textClass = theme === 'dark' ? 'text-white' : 'text-slate-900';
+  const borderClass = theme === 'dark' ? 'border-slate-800' : 'border-slate-200';
+  const subTextClass = theme === 'dark' ? 'text-white/60' : 'text-slate-500';
+
   return (
-    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-      <div className="w-full max-w-lg bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-[40px] shadow-2xl overflow-hidden relative flex flex-col h-[85dvh] border border-white/10 ring-1 ring-white/5">
-        
-        {/* Header */}
-        <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-20 pointer-events-none">
-            <div className="flex items-center gap-3 pointer-events-auto">
-                <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center border border-orange-500/50 text-orange-400">
-                    <Volume2 size={20} />
-                </div>
-                <div>
-                    <h2 className="text-white font-bold text-lg leading-none">Pichi</h2>
-                    <p className="text-slate-400 text-xs font-medium mt-1">AI Language Tutor</p>
-                </div>
-            </div>
-            <button onClick={onClose} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition pointer-events-auto">
-                <X size={20} />
-            </button>
-        </div>
-
-        {!hasStarted ? (
-            /* START SCREEN */
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6 relative overflow-hidden">
-                {/* Background Blobs */}
-                <div className="absolute top-1/4 -left-20 w-64 h-64 bg-indigo-600/20 rounded-full blur-3xl animate-blob"></div>
-                <div className="absolute bottom-1/4 -right-20 w-64 h-64 bg-orange-600/20 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
-
-                <div className="relative z-10 w-full flex flex-col items-center">
-                    <h3 className="text-3xl font-black text-white tracking-tight mb-6 mt-8">Start Session</h3>
-                    
-                    {/* Scenario Selection */}
-                    <div className="w-full mb-6">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block text-left pl-1">Choose Scenario</label>
-                        <div className="grid grid-cols-2 gap-3">
-                            {TOPICS.map(t => (
-                                <button 
-                                    key={t.id}
-                                    onClick={() => setSelectedTopic(t)}
-                                    className={`p-3 rounded-2xl border flex flex-col items-center gap-2 transition-all ${
-                                        selectedTopic.id === t.id 
-                                        ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-900/30' 
-                                        : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white hover:border-slate-600'
-                                    }`}
-                                >
-                                    {t.icon}
-                                    <span className="text-xs font-bold">{t.label}</span>
-                                </button>
-                            ))}
-                        </div>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in">
+        <div className={`relative w-full max-w-lg h-[85vh] max-h-[750px] flex flex-col rounded-[32px] overflow-hidden shadow-2xl border ${bgClass} ${borderClass} transition-colors duration-500`}>
+            
+            {/* Header */}
+            <div className={`absolute top-0 left-0 right-0 p-5 flex flex-col gap-4 z-20 backdrop-blur-sm border-b ${theme === 'dark' ? 'bg-[#0f172a]/80 border-white/5' : 'bg-white/80 border-slate-100'}`}>
+                <div className="flex justify-between items-center">
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors ${theme === 'dark' ? 'bg-white/10 border-white/5 text-white' : 'bg-slate-100 border-slate-200 text-slate-800'}`}>
+                        <Sparkles size={14} className={`${theme === 'dark' ? 'text-white fill-white' : 'text-slate-800 fill-slate-800'}`} />
+                        <span className="font-bold tracking-wide text-xs">Live Pichi</span>
                     </div>
-
-                    {/* Strict Mode Toggle */}
-                    <div className="w-full bg-slate-800/50 rounded-2xl p-1.5 flex mb-8 border border-slate-700/50">
-                        <button 
-                            onClick={() => setStrictMode(false)}
-                            className={`flex-1 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${!strictMode ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
-                        >
-                            <Sparkles size={14} /> Casual
+                    <div className="flex items-center gap-2">
+                        <button onClick={toggleTheme} className={`p-2 rounded-full transition ${theme === 'dark' ? 'hover:bg-white/10 text-white' : 'hover:bg-slate-100 text-slate-800'}`}>
+                            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
                         </button>
-                        <button 
-                            onClick={() => setStrictMode(true)}
-                            className={`flex-1 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${strictMode ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
-                        >
-                            <GraduationCap size={14} /> Strict
+                        <button onClick={onClose} className={`p-2 rounded-full transition ${theme === 'dark' ? 'hover:bg-white/10 text-white' : 'hover:bg-slate-100 text-slate-800'}`}>
+                            <X size={20} />
                         </button>
                     </div>
-
-                    {error && (
-                        <div className="bg-red-500/10 text-red-400 px-4 py-3 rounded-2xl border border-red-500/20 flex items-center gap-2 text-sm font-bold animate-shake mb-4 w-full">
-                            <AlertCircle size={16} /> {error}
-                        </div>
-                    )}
-
-                    <button 
-                        onClick={startSession}
-                        className="w-full bg-white text-slate-900 py-4 rounded-2xl font-black text-lg shadow-xl hover:scale-[1.02] transition-transform flex items-center justify-center gap-3"
-                    >
-                        <Play fill="currentColor" size={20} />
-                        Start Speaking
-                    </button>
-                    <p className="text-xs text-slate-600 mt-4 font-medium">Headphones recommended for best experience</p>
                 </div>
             </div>
-        ) : (
-            /* ACTIVE SESSION UI */
-            <div className="flex-1 flex flex-col relative">
-                
-                {/* Chat Stream (Overlay on top) */}
-                <div className="flex-1 p-6 overflow-y-auto space-y-6 pt-24 mask-linear-fade" ref={scrollRef}>
-                    {messages.length === 0 && (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50 gap-4">
-                             {status.includes('Connecting') && <Loader2 className="animate-spin text-orange-500" size={32} />}
-                             <div className="text-center">
-                                 <p className="font-bold text-sm uppercase tracking-widest mb-1">{status}</p>
-                                 {isActive && !isAiSpeaking && <p className="text-xs">Topic: {selectedTopic.label} ({strictMode ? 'Strict' : 'Casual'})</p>}
-                             </div>
+
+            {!hasStarted ? (
+                <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden p-6 mt-16">
+                    <div className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-1000 ${theme === 'dark' ? 'opacity-100' : 'opacity-40'}`}>
+                        <div className="w-64 h-64 bg-indigo-600/20 rounded-full blur-[80px] animate-pulse"></div>
+                    </div>
+                    <div className="relative z-10 flex flex-col items-center gap-6 text-center">
+                        <div className={`w-24 h-24 rounded-full flex items-center justify-center shadow-xl mb-2 transition-transform hover:scale-105 ${theme === 'dark' ? 'bg-gradient-to-tr from-indigo-600 to-blue-600 shadow-indigo-500/30' : 'bg-white shadow-xl border border-slate-100'}`}>
+                            <Mic size={40} className={theme === 'dark' ? 'text-white' : 'text-indigo-600'} />
                         </div>
-                    )}
-                    {messages.map((msg) => (
-                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
-                            <div className={`max-w-[85%] p-4 rounded-3xl text-sm leading-relaxed shadow-sm ${
-                                msg.role === 'user' 
-                                ? 'bg-orange-600 text-white rounded-tr-sm' 
-                                : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-sm'
-                            }`}>
-                                {msg.text}
+                        <div className="space-y-2">
+                            <h2 className={`text-3xl font-black tracking-tight ${textClass}`}>Speak with Pichi</h2>
+                            <p className={`text-base font-medium ${subTextClass} max-w-xs mx-auto`}>Practice English naturally with your personal AI tutor</p>
+                        </div>
+                        <div className={`flex p-1 rounded-xl border mt-2 ${theme === 'dark' ? 'bg-slate-900 border-white/5' : 'bg-slate-100 border-slate-200'}`}>
+                            <button onClick={() => setTutorMode('casual')} className={`flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all duration-300 ${tutorMode === 'casual' ? (theme === 'dark' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-indigo-600 shadow-sm') : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+                                <Sparkles size={16} /> Casual
+                            </button>
+                            <button onClick={() => setTutorMode('strict')} className={`flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all duration-300 ${tutorMode === 'strict' ? (theme === 'dark' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-indigo-600 shadow-sm') : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+                                <GraduationCap size={16} /> Strict
+                            </button>
+                        </div>
+                        {error && <div className="text-red-500 bg-red-100 dark:bg-red-900/20 px-4 py-2 rounded-lg text-sm font-bold animate-shake">{error}</div>}
+                        <button onClick={startSession} className={`px-10 py-4 rounded-full font-bold text-lg shadow-xl hover:scale-105 transition-all flex items-center gap-3 mt-2 ${theme === 'dark' ? 'bg-white text-black hover:bg-slate-100' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
+                            <Play fill="currentColor" size={20} /> Start Conversation
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex-1 flex flex-col relative overflow-hidden">
+                    {/* Chat Transcript Area - Added spacer at bottom instead of large padding-bottom */}
+                    <div className={`flex-1 overflow-y-auto p-4 sm:p-6 pt-24 pb-4 flex flex-col gap-6 custom-scrollbar ${theme === 'dark' ? 'bg-[#0f172a]' : 'bg-slate-50'}`} ref={scrollRef}>
+                        {messages.length === 0 && isActive && (
+                            <div className={`flex flex-col items-center justify-center h-full opacity-50`}>
+                                <div className="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center mb-4 animate-pulse">
+                                    <Sparkles size={32} className="text-indigo-500" />
+                                </div>
+                                <p className={`text-center font-medium ${subTextClass}`}>Listening to you...</p>
                             </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Interactive Footer */}
-                <div className="p-6 bg-slate-900/50 backdrop-blur-lg border-t border-white/5 shrink-0 z-20">
-                    <div className="flex flex-col items-center gap-6">
-                        
-                        {/* THE ORB VISUALIZER */}
-                        <div className="relative w-24 h-24 flex items-center justify-center">
-                            {/* Outer Rings */}
-                            {isActive && (
-                                <>
-                                    <div className={`absolute inset-0 rounded-full border border-white/10 ${isAiSpeaking ? 'animate-ping duration-1000' : 'animate-pulse duration-2000'}`}></div>
-                                    <div className={`absolute -inset-4 rounded-full border border-white/5 ${isAiSpeaking ? 'animate-ping duration-1500 delay-100' : 'animate-pulse duration-2000 delay-300'}`}></div>
-                                </>
-                            )}
-                            
-                            {/* Core Orb */}
-                            <div className={`w-20 h-20 rounded-full shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center transition-all duration-500 relative overflow-hidden ${
-                                isActive 
-                                    ? isAiSpeaking 
-                                        ? 'bg-gradient-to-tr from-orange-500 to-pink-500 scale-110 shadow-[0_0_50px_rgba(249,115,22,0.6)]' 
-                                        : 'bg-gradient-to-tr from-emerald-500 to-teal-500 shadow-[0_0_40px_rgba(16,185,129,0.4)]' 
-                                    : 'bg-slate-700'
-                            }`}>
-                                {isActive ? (
-                                    isAiSpeaking ? (
-                                        <div className="space-x-1 flex items-center h-4">
-                                            <div className="w-1 bg-white rounded-full h-3 animate-bounce"></div>
-                                            <div className="w-1 bg-white rounded-full h-5 animate-bounce delay-100"></div>
-                                            <div className="w-1 bg-white rounded-full h-3 animate-bounce delay-200"></div>
-                                        </div>
-                                    ) : (
-                                        <Mic className="w-8 h-8 text-white animate-pulse" />
-                                    )
-                                ) : (
-                                    <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
+                        )}
+                        {messages.map((msg) => (
+                            <div key={msg.id} className={`flex w-full animate-scale-in ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                {msg.role === 'model' && (
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md mr-3 mt-auto shrink-0">
+                                        <Sparkles size={14} fill="currentColor" />
+                                    </div>
                                 )}
+                                <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[85%]`}>
+                                    <div className={`px-5 py-3 text-[15px] sm:text-base leading-relaxed shadow-sm transition-colors duration-300 ${msg.role === 'user' ? `rounded-2xl rounded-tr-none ${theme === 'dark' ? 'bg-indigo-600 text-white' : 'bg-indigo-500 text-white'}` : `rounded-2xl rounded-tl-none ${theme === 'dark' ? 'bg-slate-800 text-slate-200' : 'bg-white text-slate-800 border border-slate-200'}`}`}>
+                                        {msg.text}
+                                    </div>
+                                    <span className={`text-[10px] font-bold mt-1.5 opacity-60 px-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{msg.timestamp}</span>
+                                </div>
                             </div>
-                        </div>
+                        ))}
+                        {/* Invisible spacer to push content above the absolute positioned waves */}
+                        <div className="h-40 shrink-0 w-full" aria-hidden="true" />
+                    </div>
 
-                        {/* Status Text */}
-                        <div className="text-center space-y-1">
-                            <h3 className="font-bold text-white text-lg tracking-tight">
-                                {isActive 
-                                    ? isAiSpeaking ? "Pichi is speaking..." : "Listening..." 
-                                    : status}
-                            </h3>
-                            <p className="text-slate-400 text-xs font-medium">
-                                {isActive && !isAiSpeaking ? "Go ahead, say something." : ""}
-                            </p>
-                        </div>
-                        
-                        <button 
-                            onClick={onClose}
-                            className="bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 px-6 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 border border-slate-700 hover:border-red-500/50"
-                        >
-                            <StopCircle size={14} /> End Session
-                        </button>
+                    {/* Wave Visualization - Floating & Centered with Glow */}
+                    <div className={`absolute bottom-0 left-0 right-0 h-32 flex items-center justify-center z-10 pointer-events-none bg-gradient-to-t ${theme === 'dark' ? 'from-[#0f172a] via-[#0f172a]/95 to-transparent' : 'from-slate-50 via-slate-50/95 to-transparent'}`}>
+                        <canvas ref={canvasRef} className="w-full h-full object-cover opacity-90" />
                     </div>
                 </div>
-            </div>
-        )}
-      </div>
+            )}
+        </div>
     </div>
   );
 };

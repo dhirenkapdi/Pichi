@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { generateGameData, generateCrosswordData } from '../services/geminiService';
-import { Gamepad2, Timer, Trophy, Zap, RefreshCw, Loader2, Star, MoveLeft, Check, X, AlertCircle, Grid3X3, Play, Keyboard, MousePointerClick } from 'lucide-react';
+import { Gamepad2, Timer, Trophy, Zap, RefreshCw, Loader2, Star, MoveLeft, Check, X, AlertCircle, Grid3X3, Play, Keyboard, MousePointerClick, Search } from 'lucide-react';
 import { addXp } from '../utils/progressUtils';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 
 const GameArena: React.FC = () => {
-  const [activeGame, setActiveGame] = useState<'menu' | 'scramble' | 'rapidFire' | 'crossword' | 'wordSelect'>('menu');
+  const [activeGame, setActiveGame] = useState<'menu' | 'scramble' | 'rapidFire' | 'crossword' | 'wordSelect' | 'wordSearch'>('menu');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [loading, setLoading] = useState(false);
   const [gameData, setGameData] = useState<any[]>([]);
@@ -37,9 +37,18 @@ const GameArena: React.FC = () => {
   const [crosswordFocus, setCrosswordFocus] = useState<{r: number, c: number, dir: 'across'|'down'} | null>(null);
   const gridInputRefs = useRef<any>({});
 
+  // Word Search State
+  const [wsGrid, setWsGrid] = useState<string[][]>([]);
+  const [wsWords, setWsWords] = useState<string[]>([]);
+  const [wsFound, setWsFound] = useState<string[]>([]);
+  const [wsTopic, setWsTopic] = useState('');
+  const [wsSelection, setWsSelection] = useState<{r:number, c:number}[]>([]);
+  const [wsIsSelecting, setWsIsSelecting] = useState(false);
+  const [wsStartCell, setWsStartCell] = useState<{r:number, c:number} | null>(null);
+
   // --- GAME LOGIC ---
 
-  const startGame = async (type: 'scramble' | 'rapidFire' | 'crossword' | 'wordSelect') => {
+  const startGame = async (type: 'scramble' | 'rapidFire' | 'crossword' | 'wordSelect' | 'wordSearch') => {
     setActiveGame(type);
     setScore(0);
     setGameOver(false);
@@ -56,7 +65,7 @@ const GameArena: React.FC = () => {
     }
 
     setLoading(true);
-    const data = await generateGameData(type, 5, difficulty); // Fetch 5 rounds with selected difficulty
+    const data = await generateGameData(type, 5, difficulty); 
     setGameData(data);
     setCurrentQuestionIndex(0);
     setLoading(false);
@@ -65,6 +74,8 @@ const GameArena: React.FC = () => {
         initScrambleRound(data[0]);
     } else if (type === 'rapidFire' && data.length > 0) {
         initRapidFireRound();
+    } else if (type === 'wordSearch' && data.length > 0) {
+        initWordSearch(data[0]);
     }
   };
 
@@ -121,6 +132,18 @@ const GameArena: React.FC = () => {
       setTimerActive(true);
       setFeedback(null);
       setSelectedOption(null);
+  };
+
+  const initWordSearch = (data: any) => {
+      const size = 10;
+      const { grid, placedWords } = generateWordSearchGrid(size, data.words);
+      setWsGrid(grid);
+      setWsWords(placedWords);
+      setWsTopic(data.topic);
+      setWsFound([]);
+      setWsSelection([]);
+      setWsIsSelecting(false);
+      setWsStartCell(null);
   };
 
   useEffect(() => {
@@ -221,6 +244,81 @@ const GameArena: React.FC = () => {
       setSelectedOption(-1); // No selection made
       setTimeout(nextRound, 1500);
   };
+
+  // --- Word Search Handlers ---
+  
+  const handleWsDown = (r: number, c: number) => {
+      if (activeGame !== 'wordSearch') return;
+      setWsIsSelecting(true);
+      setWsStartCell({r, c});
+      setWsSelection([{r, c}]);
+  }
+
+  const handleWsOver = (r: number, c: number) => {
+      if (!wsIsSelecting || !wsStartCell) return;
+      
+      const { r: startR, c: startC } = wsStartCell;
+      const dr = r - startR;
+      const dc = c - startC;
+      
+      // Determine direction (H, V, D)
+      // Horizontal: r same
+      // Vertical: c same
+      // Diagonal: |dr| == |dc|
+      
+      const newSelection: {r:number, c:number}[] = [];
+      
+      if (dr === 0) { // Horizontal
+          const step = dc > 0 ? 1 : -1;
+          for (let i = 0; i <= Math.abs(dc); i++) {
+              newSelection.push({r: startR, c: startC + (i * step)});
+          }
+      } else if (dc === 0) { // Vertical
+          const step = dr > 0 ? 1 : -1;
+          for (let i = 0; i <= Math.abs(dr); i++) {
+              newSelection.push({r: startR + (i * step), c: startC});
+          }
+      } else if (Math.abs(dr) === Math.abs(dc)) { // Diagonal
+          const stepR = dr > 0 ? 1 : -1;
+          const stepC = dc > 0 ? 1 : -1;
+          for (let i = 0; i <= Math.abs(dr); i++) {
+              newSelection.push({r: startR + (i * stepR), c: startC + (i * stepC)});
+          }
+      }
+      
+      if (newSelection.length > 0) setWsSelection(newSelection);
+  }
+
+  const handleWsUp = () => {
+      if (!wsIsSelecting) return;
+      setWsIsSelecting(false);
+      
+      // Check word
+      const selectedWord = wsSelection.map(cell => wsGrid[cell.r][cell.c]).join('');
+      const reversedWord = selectedWord.split('').reverse().join('');
+      
+      let found = false;
+      if (wsWords.includes(selectedWord) && !wsFound.includes(selectedWord)) {
+          setWsFound(prev => [...prev, selectedWord]);
+          found = true;
+      } else if (wsWords.includes(reversedWord) && !wsFound.includes(reversedWord)) {
+          setWsFound(prev => [...prev, reversedWord]);
+          found = true;
+      }
+      
+      if (found) {
+          const points = 15;
+          setScore(prev => prev + points);
+          if (wsFound.length + 1 === wsWords.length) {
+              setTimeout(endGame, 1000);
+          }
+      }
+      
+      setWsSelection([]);
+      setWsStartCell(null);
+  }
+
+  // --- Common Navigation ---
 
   const nextRound = () => {
       if (currentQuestionIndex < gameData.length - 1) {
@@ -421,7 +519,7 @@ const GameArena: React.FC = () => {
                     </div>
                 </button>
 
-                 {/* Word Select Card (New) */}
+                 {/* Word Select Card */}
                  <button 
                   onClick={() => startGame('wordSelect')}
                   disabled={loading}
@@ -435,6 +533,25 @@ const GameArena: React.FC = () => {
                         <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Word Select</h3>
                         <p className="text-slate-500 dark:text-slate-400 font-medium mb-4 text-xs">Choose the right word for the context.</p>
                         <div className="mt-6 inline-flex items-center text-sm font-bold text-teal-600 dark:text-teal-400">
+                             Play Now <MoveLeft className="ml-2 rotate-180" size={16}/>
+                        </div>
+                    </div>
+                </button>
+
+                {/* Word Search Card (New) */}
+                <button 
+                  onClick={() => startGame('wordSearch')}
+                  disabled={loading}
+                  className="group relative bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-xl hover:-translate-y-1 transition-all overflow-hidden text-left h-full"
+                >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-pink-100 dark:bg-pink-900/20 rounded-bl-full -mr-8 -mt-8 group-hover:scale-110 transition"></div>
+                    <div className="relative z-10">
+                        <div className="w-14 h-14 bg-pink-500 text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-pink-200 dark:shadow-none">
+                            <Search size={28} />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Word Search</h3>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium mb-4 text-xs">Find words hidden in the grid.</p>
+                        <div className="mt-6 inline-flex items-center text-sm font-bold text-pink-600 dark:text-pink-400">
                              Play Now <MoveLeft className="ml-2 rotate-180" size={16}/>
                         </div>
                     </div>
@@ -478,7 +595,7 @@ const GameArena: React.FC = () => {
                   <Trophy size={48} fill="currentColor" />
               </div>
               <h2 className="text-3xl font-black text-slate-800 dark:text-white mb-2">Game Over!</h2>
-              <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">{activeGame === 'crossword' ? 'Crossword' : difficulty + ' mode'}</div>
+              <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">{activeGame === 'crossword' || activeGame === 'wordSearch' ? 'Puzzle Complete' : difficulty + ' mode'}</div>
               <p className="text-slate-500 dark:text-slate-400 mb-8">You scored <span className="text-indigo-600 font-bold">{score} XP</span></p>
               
               <button onClick={exitGame} className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-4 rounded-2xl hover:bg-black dark:hover:bg-slate-200 transition">
@@ -486,6 +603,86 @@ const GameArena: React.FC = () => {
               </button>
           </div>
       );
+  }
+
+  // --- WORD SEARCH SPECIFIC UI ---
+  if (activeGame === 'wordSearch') {
+      return (
+          <div className="max-w-2xl mx-auto flex flex-col items-center pb-10" onMouseUp={handleWsUp}>
+              <div className="w-full flex justify-between items-center mb-6">
+                   <button onClick={exitGame} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 font-bold flex items-center gap-2"><X size={20}/> Quit</button>
+                   <div className="bg-yellow-100 dark:bg-yellow-900/30 px-4 py-2 rounded-xl text-yellow-600 dark:text-yellow-400 font-bold flex items-center gap-2">
+                       <Zap size={18} fill="currentColor" /> {score}
+                   </div>
+              </div>
+
+              <div className="text-center mb-6">
+                  <h3 className="text-2xl font-black text-slate-800 dark:text-white">{wsTopic} Word Search</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Find the hidden words</p>
+              </div>
+
+              {/* GRID */}
+              <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 touch-none select-none mb-8">
+                  <div 
+                    className="grid gap-1"
+                    style={{ gridTemplateColumns: `repeat(${wsGrid.length}, minmax(0, 1fr))` }}
+                    onMouseLeave={handleWsUp}
+                  >
+                      {wsGrid.map((row, r) => (
+                          row.map((char, c) => {
+                              // Check if cell is in current selection or found words
+                              // Note: We need to store found words as coordinates or re-scan grid.
+                              // Simple approach: Store found cells in a set or re-calculate.
+                              // Better: Highlight based on selection coordinates for drag, and permanent class for found.
+                              // Since we only stored found words as strings, we need to find their coords again? 
+                              // No, let's keep it simple: If 'found', checking requires knowing where.
+                              // Refactoring init to store found coords would be better, but let's just color selection for now.
+                              // Actually, to color found words permanently, we need their coords. 
+                              // Let's assume we just cross them off list for now, or improve logic.
+                              // IMPROVEMENT: Let's just highlight selection. For found words, we rely on the list strikethrough.
+                              
+                              const isSelected = wsSelection.some(s => s.r === r && s.c === c);
+                              
+                              return (
+                                  <div
+                                    key={`${r}-${c}`}
+                                    onMouseDown={() => handleWsDown(r, c)}
+                                    onMouseEnter={() => handleWsOver(r, c)}
+                                    onTouchStart={() => handleWsDown(r, c)} // Basic touch
+                                    className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-lg font-bold rounded-md cursor-pointer transition-colors ${
+                                        isSelected 
+                                        ? 'bg-pink-500 text-white shadow-lg scale-110' 
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                    }`}
+                                  >
+                                      {char}
+                                  </div>
+                              )
+                          })
+                      ))}
+                  </div>
+              </div>
+
+              {/* WORD LIST */}
+              <div className="flex flex-wrap gap-3 justify-center max-w-lg">
+                  {wsWords.map((word, i) => {
+                      const isFound = wsFound.includes(word);
+                      return (
+                          <div 
+                            key={i} 
+                            className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${
+                                isFound 
+                                ? 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-500 text-emerald-600 dark:text-emerald-400 line-through opacity-70' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
+                            }`}
+                          >
+                              {word}
+                          </div>
+                      )
+                  })}
+              </div>
+          </div>
+      )
   }
 
   // --- CROSSWORD SPECIFIC UI ---
@@ -802,9 +999,76 @@ const GameArena: React.FC = () => {
   );
 };
 
-// --- CROSSWORD GENERATOR ALGORITHM ---
-// Attempts to create a dense crossword grid from a list of words.
-// Returns grid 2D array and clue lists.
+// --- HELPER FUNCTIONS FOR WORD SEARCH ---
+
+function generateWordSearchGrid(size: number, words: string[]) {
+    // Initialize empty grid
+    const grid: string[][] = Array(size).fill(null).map(() => Array(size).fill(''));
+    const placedWords: string[] = [];
+    
+    // Sort words by length desc (harder to place long words later)
+    const sortedWords = [...words].sort((a, b) => b.length - a.length);
+    
+    for (const word of sortedWords) {
+        let placed = false;
+        let attempts = 0;
+        
+        while (!placed && attempts < 50) {
+            attempts++;
+            const direction = Math.floor(Math.random() * 3); // 0: H, 1: V, 2: D
+            const row = Math.floor(Math.random() * size);
+            const col = Math.floor(Math.random() * size);
+            
+            if (canPlaceWordSearch(grid, word, row, col, direction, size)) {
+                placeWordSearch(grid, word, row, col, direction);
+                placedWords.push(word);
+                placed = true;
+            }
+        }
+    }
+    
+    // Fill empty cells
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+            if (grid[r][c] === '') {
+                grid[r][c] = letters[Math.floor(Math.random() * letters.length)];
+            }
+        }
+    }
+    
+    return { grid, placedWords };
+}
+
+function canPlaceWordSearch(grid: string[][], word: string, row: number, col: number, direction: number, size: number) {
+    if (direction === 0) { // Horizontal
+        if (col + word.length > size) return false;
+        for (let i = 0; i < word.length; i++) {
+            if (grid[row][col + i] !== '' && grid[row][col + i] !== word[i]) return false;
+        }
+    } else if (direction === 1) { // Vertical
+        if (row + word.length > size) return false;
+        for (let i = 0; i < word.length; i++) {
+            if (grid[row + i][col] !== '' && grid[row + i][col] !== word[i]) return false;
+        }
+    } else { // Diagonal
+        if (row + word.length > size || col + word.length > size) return false;
+        for (let i = 0; i < word.length; i++) {
+            if (grid[row + i][col + i] !== '' && grid[row + i][col + i] !== word[i]) return false;
+        }
+    }
+    return true;
+}
+
+function placeWordSearch(grid: string[][], word: string, row: number, col: number, direction: number) {
+    for (let i = 0; i < word.length; i++) {
+        if (direction === 0) grid[row][col + i] = word[i];
+        else if (direction === 1) grid[row + i][col] = word[i];
+        else grid[row + i][col + i] = word[i];
+    }
+}
+
+// ... Existing Crossword Helpers ...
 function generateCrosswordLayout(words: {word: string, clue: string}[]) {
     const GRID_SIZE = 15; // Standard small puzzle size
     // Initialize empty grid
